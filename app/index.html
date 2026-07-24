@@ -5,6 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <meta name="theme-color" content="#10b981" />
 <link rel="manifest" href="manifest.json" />
+<!-- Schnellerer erster Kontakt zu den Foto-/Daten-Quellen (spart TLS-Aufbau beim ersten Bild) -->
+<link rel="preconnect" href="https://api.inaturalist.org" crossorigin />
+<link rel="preconnect" href="https://inaturalist-open-data.s3.amazonaws.com" crossorigin />
+<link rel="preconnect" href="https://static.inaturalist.org" crossorigin />
+<link rel="preconnect" href="https://upload.wikimedia.org" crossorigin />
+<link rel="dns-prefetch" href="https://de.wikipedia.org" />
 <link rel="icon" href="icon.svg" type="image/svg+xml" />
 <link rel="apple-touch-icon" href="icon.svg" />
 <title>BIOGLOW – Erkennen. Verstehen. Handeln.</title>
@@ -675,11 +681,14 @@ async function speciesPhoto(sci){
 let _prewarmDone=false;
 async function prewarmPhotos(){
   if(_prewarmDone||!online()||typeof SPECIES==='undefined')return;_prewarmDone=true;
-  for(const s of SPECIES){
-    if(!s.sci)continue;
-    let u=_photoCache[s.sci];
-    if(u===undefined){u=await speciesPhoto(s.sci);await new Promise(r=>setTimeout(r,140));} // API schonen
-    if(u){try{const im=new Image();im.decoding='async';im.src=u;}catch(e){}}            // Bytes vorladen
+  const list=SPECIES.filter(s=>s.sci);
+  const BATCH=5;                                   // in kleinen Paketen parallel → viel schneller fertig
+  for(let i=0;i<list.length;i+=BATCH){
+    await Promise.all(list.slice(i,i+BATCH).map(async s=>{
+      const u=await speciesPhoto(s.sci);           // URL (aus Cache sofort, sonst 1 API-Aufruf)
+      if(u){try{const im=new Image();im.decoding='async';im.src=u;}catch(e){}} // Bild-Bytes vorladen
+    }));
+    await new Promise(r=>setTimeout(r,120));        // kurze Pause, um die API zu schonen
   }
 }
 /* Kompatibilität: alter Name, wird an mehreren Stellen genutzt. */
@@ -1168,7 +1177,8 @@ function screenProfile(){
     <div class="badge-grid">${badges.map(b=>`<div class="badge ${b[2]?'on':'off'}"><div class="e">${b[0]}</div><div class="l">${b[1]}</div></div>`).join('')}</div>
 
     <div class="sec-title"><h2>Hilfe</h2></div>
-    <button class="btn btn-ghost" onclick="openHelp()">❓ Hilfe & geführte Tour</button>
+    <button class="btn btn-ghost" onclick="openFeedback()">🐞 Fehler / Feedback melden</button>
+    <button class="btn btn-ghost" style="margin-top:10px" onclick="openHelp()">❓ Hilfe & geführte Tour</button>
     <button class="btn btn-ghost" style="margin-top:10px" onclick="openLegal()">⚖️ Impressum & Datenschutz</button>
 
     <div class="sec-title"><h2>Daten</h2></div>
@@ -1844,7 +1854,7 @@ function openMap(){
    in der App stehen – genau dafür ist er gedacht. */
 const BIOGLOW_CLOUD = {
   url: 'https://supabase.arndt-software.de',
-  key: ''   /* <<< HIER den Supabase anon/publishable Key eintragen → zentrale Cloud ist aktiv */
+  key: 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTc4NDgxMTAwMCwiZXhwIjo0OTQwNDg0NjAwLCJyb2xlIjoiYW5vbiJ9.kMAlX4dS_sXjH6dsLoICMKnwyHFLAAuEwum7zuJh2DQ'   /* anon/public Key – zentrale Cloud aktiv (öffentlich ok, geschützt durch RLS) */
 };
 function supaCfg(){
   const s=S.supabase||{};
@@ -2636,6 +2646,56 @@ function joinMissionIdx(i){
 }
 function delCustomMission(id){S.customMissions=(S.customMissions||[]).filter(m=>m.id!==id);saveSettings();render();}
 
+/* ============================ FEHLER / FEEDBACK MELDEN ============================
+   Speichert in die Supabase-Tabelle „feedback" (zentrale Cloud). Offline → lokale
+   Warteschlange, wird beim Wiederverbinden gesendet. Ohne Cloud → E-Mail-Rückfall. */
+const FEEDBACK_MAIL='farndt691@gmail.com'; /* Kontakt-Adresse für den E-Mail-Rückfall */
+function openFeedback(){
+  openModal('<h3>🐞 Fehler / Feedback melden</h3>'
+    +'<div class="mini muted" style="margin:4px 0 10px">Hilf uns, BIOGLOW besser zu machen. Was ist passiert – oder was wünschst du dir?</div>'
+    +'<label class="fld">Art</label>'
+    +'<select id="fbCat">'
+      +'<option value="bug">🐞 Fehler (etwas geht nicht)</option>'
+      +'<option value="inhalt">📚 Falsche Art / falsche Info</option>'
+      +'<option value="vorschlag">💡 Verbesserungsvorschlag</option>'
+      +'<option value="lob">⭐ Lob</option>'
+      +'<option value="sonstiges">💬 Sonstiges</option>'
+    +'</select>'
+    +'<label class="fld">Beschreibung</label>'
+    +'<textarea id="fbTxt" rows="4" placeholder="Kurz beschreiben (mind. 10 Zeichen) …"></textarea>'
+    +'<button class="btn btn-primary" style="margin-top:10px" onclick="sendFeedback()">📨 Senden</button>'
+    +'<button class="btn btn-ghost" style="margin-top:8px" onclick="closeModal()">Abbrechen</button>');
+  setTimeout(()=>{if($('fbTxt'))$('fbTxt').focus();},60);
+}
+async function sendFeedback(){
+  const cat=$('fbCat')?$('fbCat').value:'sonstiges';
+  const txt=($('fbTxt')?$('fbTxt').value:'').trim();
+  if(txt.length<10){toast('Bitte mindestens 10 Zeichen beschreiben.');return;}
+  const p={category:cat,message:txt,area:(typeof TAB!=='undefined'?TAB:null),lang:S.lang||'de',app_version:'RC1',name:S.name||null,created_at:new Date().toISOString()};
+  closeModal();
+  if(!online()){queueFeedback(p);toast('📥 Offline gespeichert – wird beim nächsten Mal gesendet.');return;}
+  const ok=await postFeedback(p);
+  if(ok){toast('✅ Danke für dein Feedback! ❤️');}
+  else{queueFeedback(p);feedbackMailto(p);}
+}
+async function postFeedback(p){
+  const c=supaCfg();if(!c.url||!c.key)return false;
+  try{const r=await fetch(c.url.replace(/\/$/,'')+'/rest/v1/feedback',{method:'POST',
+    headers:{apikey:c.key,Authorization:'Bearer '+c.key,'Content-Type':'application/json',Prefer:'return=minimal'},
+    body:JSON.stringify(p)});return r.ok;}catch(e){return false;}
+}
+function queueFeedback(p){try{const q=JSON.parse(localStorage.getItem('bioglow_feedback_queue')||'[]');q.push(p);localStorage.setItem('bioglow_feedback_queue',JSON.stringify(q));}catch(e){}}
+async function flushFeedbackQueue(){
+  if(!online())return;let q=[];try{q=JSON.parse(localStorage.getItem('bioglow_feedback_queue')||'[]');}catch(e){}
+  if(!q.length)return;const left=[];
+  for(const p of q){const ok=await postFeedback(p);if(!ok)left.push(p);}
+  try{localStorage.setItem('bioglow_feedback_queue',JSON.stringify(left));}catch(e){}
+}
+function feedbackMailto(p){
+  const subj='BIOGLOW Feedback: '+p.category;
+  const body=p.message+'\n\n--- Info ---\nKategorie: '+p.category+'\nBereich: '+(p.area||'?')+'\nSprache: '+p.lang+'\nVersion: '+p.app_version;
+  try{location.href='mailto:'+FEEDBACK_MAIL+'?subject='+encodeURIComponent(subj)+'&body='+encodeURIComponent(body);toast('📧 Kein Cloud-Versand – Mail-App wird geöffnet …');}catch(e){}
+}
 /* ============================ DATEN-TRANSPARENZ ============================ */
 function openDataInfo(){
   openModal('<h3>🔒 Was passiert mit deinen Daten?</h3><div class="mini" style="line-height:1.75">'
@@ -2697,7 +2757,7 @@ function openMonitorSpot(id){
 if('serviceWorker' in navigator && location.protocol.startsWith('http')){
   window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
 }
-window.addEventListener('online',()=>{updateNet();render();syncPending();});
+window.addEventListener('online',()=>{updateNet();render();syncPending();flushFeedbackQueue();});
 window.addEventListener('offline',()=>{updateNet();render();});
 /* BioBlitz-Countdown: alle 20 s neu rendern, wenn aktiv und auf Missionen-Tab. */
 setInterval(()=>{if(S.blitz&&TAB==='missions'&&$('modal').classList.contains('hide'))render();},20000);
@@ -2722,6 +2782,8 @@ function finishOnboard(mode){
   if(typeof computeSmartTip==='function'){computeSmartTip().then(()=>{if(TAB==='home')render();}).catch(()=>{});}
   /* Katalog-Fotos im Hintergrund vorladen (verzögert, damit der Start flüssig bleibt). */
   setTimeout(()=>{try{prewarmPhotos();}catch(e){}},2500);
+  /* Offline gespeichertes Feedback nachsenden, falls online. */
+  setTimeout(()=>{try{flushFeedbackQueue();}catch(e){}},3500);
 })();
 </script>
 </body>
