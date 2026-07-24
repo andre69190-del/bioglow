@@ -1,0 +1,14 @@
+{
+  "name": "BIOGLOW – Citizen Science",
+  "short_name": "BIOGLOW",
+  "description": "Erkennen. Verstehen. Handeln. Lebensräume dokumentieren und schützen.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "theme_color": "#10b981",
+  "background_color": "#ecfdf5",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
