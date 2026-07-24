@@ -603,6 +603,25 @@ function demoIdentify(dataUrl){
   return top.map((x,i)=>({key:x.s.key,sci:x.s.sci,de:x.s.de,emoji:x.s.emoji,grp:x.s.grp,impact:x.s.impact,fact:x.s.fact,
     conf:clamp((x.w/tot)*(i===0?1.6:1),.3,.97)}));
 }
+/* Echtes Vorschaubild von Wikipedia holen (damit z. B. Grasfrosch und Erdkröte
+   unterschiedlich aussehen und nicht beide nur 🐸 zeigen). Ergebnis wird gecacht.
+   Offline → kein Bild, dann greift automatisch das Emoji als Rückfall. */
+const _wikiThumbCache={};
+async function wikiThumb(sci){
+  if(!sci)return null;
+  if(sci in _wikiThumbCache)return _wikiThumbCache[sci];
+  try{
+    const r=await fetch('https://de.wikipedia.org/api/rest_v1/page/summary/'+encodeURIComponent(sci.replace(/ /g,'_')));
+    if(r.ok){const j=await r.json();const u=(j.thumbnail&&j.thumbnail.source)||null;_wikiThumbCache[sci]=u;return u;}
+  }catch(e){}
+  _wikiThumbCache[sci]=null;return null;
+}
+/* Hängt an eine Vorschlagsliste echte Wikipedia-Bilder an (nur online, parallel). */
+async function attachWikiThumbs(cands){
+  if(!online()||!cands||!cands.length)return cands;
+  try{await Promise.all(cands.map(async c=>{if(!c.photo&&c.sci){const u=await wikiThumb(c.sci);if(u)c.photo=u;}}));}catch(e){}
+  return cands;
+}
 /* Standort-genaue Vorschläge: wenn online + GPS, die lokal HÄUFIGSTEN Arten vorschlagen
    (iNaturalist), sonst der jahreszeitliche Katalog. So ist nicht immer alles gleich. */
 async function demoIdentifyLocal(dataUrl){
@@ -610,10 +629,13 @@ async function demoIdentifyLocal(dataUrl){
     try{
       const p=await getPositionCached();
       const near=await fetchNearbySpecies(p.lat,p.lng,6);
-      if(near&&near.length)return {local:true,cands:near.map(s=>({key:'loc_'+String(s.sci||s.de).replace(/\s+/g,'_'),sci:s.sci,de:s.de,emoji:s.emoji,grp:'Art',impact:2,conf:null,fact:'In deiner Umgebung häufig beobachtet (iNaturalist). Bitte die richtige Art wählen.'}))};
+      if(near&&near.length){
+        const cands=near.map(s=>({key:'loc_'+String(s.sci||s.de).replace(/\s+/g,'_'),sci:s.sci,de:s.de,emoji:s.emoji,grp:'Art',impact:2,conf:null,photo:s.photo||null,fact:'In deiner Umgebung häufig beobachtet (iNaturalist). Bitte die richtige Art wählen.'}));
+        return {local:true,cands:await attachWikiThumbs(cands)};
+      }
     }catch(e){}
   }
-  return {local:false,cands:demoIdentify(dataUrl)};
+  return {local:false,cands:await attachWikiThumbs(demoIdentify(dataUrl))};
 }
 /* iNaturalist echte Artensuche (Autocomplete gegen weltweite Datenbank) */
 async function inatSearch(q){
@@ -672,6 +694,24 @@ function guessEmoji(l){l=(l||'').toLowerCase();
   if(/fox|hedgehog|squirrel|mouse|rabbit|hare|deer|bat\b|mole|shrew|vole|marmot/.test(l))return '🦔';
   return '🔎';
 }
+/* --- Plausibilitäts-Filter: verhindert, dass Menschen/Gegenstände als Art durchgehen ---
+   MobileNet (ImageNet) kennt KEINE Klasse "Mensch". Ein Foto von einer Person wird deshalb
+   zwangsweise auf die optisch ähnlichste der 1000 Klassen geworfen (oft Kleidung, Perücke,
+   Möbel …). Ohne Filter würde daraus ein falscher "Fund". Diese zwei Listen fangen das ab. */
+const NONNATURE_RE=/\b(wig|mask|ski_?mask|bathing_?cap|shower_?cap|bonnet|sunglass|sunglasses|suit|jersey|sweatshirt|cardigan|jean|jeans|miniskirt|maillot|bikini|brassiere|bra|bow_?tie|bolo_?tie|lab_?coat|trench_?coat|kimono|poncho|gown|swab|neck_?brace|stethoscope|face_?powder|hair_?spray|lotion|sunscreen|band_?aid|cowboy_?hat|sombrero|football_?helmet|crash_?helmet|seat_?belt|car|truck|minivan|pickup|sports_?car|racer|screen|monitor|laptop|notebook|desktop_?computer|cellular|cellphone|telephone|ipod|remote|desk|dining_?table|table_?lamp|wardrobe|refrigerator|washer|microwave|toilet|sink|chair|couch|throne|book|binder|envelope|street_?sign|traffic_?light|wall_?clock|pillow|quilt|hand_?blower|mailbox|barber_?chair|shoe|running_?shoe|clog|sandal|maraca|balloon)\b/;
+const NATURE_RE=/(bee|wasp|hornet|butterfl|moth|beetle|ladyb|mantis|\bant\b|grasshopper|cricket|dragonfly|weevil|leafhopper|bird|jay|magpie|finch|robin|sparrow|owl|duck|goose|crane|stork|jackdaw|chickadee|titmouse|wren|kite|hawk|woodpecker|frog|toad|newt|salamander|lizard|snake|gecko|iguana|skink|spider|scorpion|snail|slug|mushroom|fungus|agaric|bolete|earthstar|stinkhorn|daisy|dandelion|flower|orchid|rose|tulip|sunflower|\bhip\b|tree|oak|pine|maple|willow|leaf|acorn|cypress|\bfir\b|fox|hedgehog|squirrel|mouse|rabbit|hare|deer|\bbat\b|mole|shrew|vole|marmot|coral|caterpillar|worm|centipede|millipede|\bmoss\b|fern|fruit|berry|corn)/;
+/* Optional stärkere Sperre: Browser-eigene Gesichtserkennung (kein Download). Wenn nicht
+   verfügbar (z. B. Desktop ohne Flag), greift weiterhin der Wort-Filter oben. */
+async function containsFace(img){
+  try{
+    if('FaceDetector' in window){
+      const fd=new window.FaceDetector({fastMode:true,maxDetectedFaces:1});
+      const faces=await fd.detect(img);
+      return !!(faces&&faces.length);
+    }
+  }catch(e){/* Detector nicht nutzbar → kein harter Block, Wort-Filter reicht */}
+  return false;
+}
 /* Versucht, ein englisches MobileNet-Label auf den lokalen Katalog abzubilden (grobe Stichwort-Suche). */
 function matchCatalog(label){
   const l=(label||'').toLowerCase();
@@ -687,14 +727,34 @@ function matchCatalog(label){
 async function ondeviceIdentify(dataUrl){
   const net=await ensureMobilenet();
   const img=await dataUrlToImg(dataUrl);
+  /* 1) Harte Sperre: erkennt der Browser ein Gesicht, ist es (fast) sicher ein Mensch. */
+  if(await containsFace(img)){
+    return [{reject:true,reason:'face',de:'Das sieht nach einem Menschen aus 🙂',
+      hint:'BIOGLOW bestimmt Pflanzen, Tiere und Pilze – bitte fotografiere ein Lebewesen (Blatt, Blüte, Insekt …).'}];
+  }
   const preds=await net.classify(img,5);
-  return (preds||[]).map((p)=>{
+  const mapped=(preds||[]).map((p)=>{
     const label=(p.className||'').split(',')[0].trim();
+    const rawKey=(p.className||'').toLowerCase().replace(/[ ,]/g,'_');
     const m=matchCatalog(label);
-    if(m)return {key:m.key,sci:m.sci,de:m.de,emoji:m.emoji,grp:m.grp,impact:m.impact,fact:m.fact,conf:p.probability};
+    if(m)return {key:m.key,sci:m.sci,de:m.de,emoji:m.emoji,grp:m.grp,impact:m.impact,fact:m.fact,conf:p.probability,_label:rawKey,_matched:true};
     return {key:'mn_'+label.replace(/\s+/g,'_'),sci:label,de:label,emoji:guessEmoji(label),grp:'Art (On-Device KI)',impact:2,
-      fact:'Von der Offline-KI (MobileNet) im Browser erkannt. Bitte selbst prüfen und ggf. Namen anpassen.',conf:p.probability};
+      fact:'Von der Offline-KI (MobileNet) im Browser erkannt. Bitte selbst prüfen und ggf. Namen anpassen.',conf:p.probability,_label:rawKey,_matched:false};
   });
+  /* 2) Wort-Filter: Kleidung/Möbel/Technik raus; Nicht-Katalog-Labels nur behalten, wenn sie
+        klar nach Natur aussehen UND genug Konfidenz haben. Katalog-Treffer sind vertrauenswürdiger. */
+  const filtered=mapped.filter((c)=>{
+    const l=c._label||'';
+    if(NONNATURE_RE.test(l))return false;
+    if(c._matched)return c.conf>=0.04;
+    return NATURE_RE.test(l)&&c.conf>=0.12;
+  });
+  /* 3) Nichts Plausibles übrig → ehrliche Rückmeldung statt erfundener Art. */
+  if(!filtered.length){
+    return [{reject:true,reason:'nonnature',de:'Kein Lebewesen sicher erkannt',
+      hint:'Bitte näher an Blatt, Blüte oder Tier herangehen, scharf stellen und erneut versuchen – oder online iNaturalist/Pl@ntNet wählen.'}];
+  }
+  return await attachWikiThumbs(filtered);
 }
 
 /* Einheitliche Bestimmungs-Funktion je nach gewähltem Provider */
@@ -992,8 +1052,17 @@ function screenProfile(){
 
     <div class="sec-title"><h2>Klasse & Cloud</h2></div>
     <div class="card">
+      ${usingCentralCloud()?`
+      <div class="mini" style="color:var(--em-d);font-weight:700;margin-bottom:6px">☁️ Zentrale Cloud aktiv – kein Setup nötig.</div>
+      <div class="mini muted">Gebt einfach alle denselben <b>Gruppencode</b> ein – dann seht ihr die Funde und Aktionen eurer Gruppe. Fertig.</div>
+      <label class="fld" style="margin-top:10px">Gruppen-/Klassencode</label>
+      <input type="text" value="${esc(S.classCode||'')}" placeholder="z. B. 8b-2026 (einfach ausdenken)" oninput="onClassInput(this.value)">
+      <div class="mini muted" style="margin-top:4px">${S.classCode?('Du bist in Gruppe „'+esc(S.classCode)+'".'):'Noch keine Gruppe – Code eintippen zum Erstellen/Beitreten.'}</div>
+      `:`
       <div class="mini muted">Für gemeinsames Forschen (Klasse/Gruppe). Kinder brauchen nur einen <b>Beitritts-Code</b> von der Lehrkraft – sonst nichts.</div>
       <button class="btn btn-primary btn-sm" style="width:100%;margin-top:10px" onclick="joinByCodePrompt()">🔑 Mit Klassen-Code beitreten</button>
+      `}
+      <a class="btn btn-ghost btn-sm" style="width:100%;margin-top:8px;display:block;text-align:center;text-decoration:none" href="/anleitung.html" target="_blank" rel="noopener">📖 Anleitung: Gruppe &amp; Mission</a>
       ${supaOn()?'<button class="btn btn-ghost btn-sm" style="width:100%;margin-top:8px" onclick="openClassDashboard()">🎓 Klassen-Dashboard</button>':''}
       <button class="btn btn-ghost btn-sm" style="width:100%;margin-top:8px" onclick="openTeacherArea()">🔧 Für Lehrkräfte / Erweitert${S.pin?' 🔒':''}</button>
       <div class="mini" style="margin-top:8px;color:${supaOn()?'var(--em-d)':'var(--s500)'}">${supaOn()?('☁️ Cloud aktiv'+(S.classCode?(' · Klasse „'+esc(S.classCode)+'"'):'')):'⚪ Cloud aus – alles bleibt lokal'}</div>
@@ -1216,6 +1285,16 @@ function chooseAi(k){
   saveSettings();closeModal();updateModeBtn();proceedIdentify();
 }
 function showCandidates(provider,cands){
+  /* Kein Lebewesen / Mensch erkannt → ehrliche Rückmeldung, KEIN Bestätigen-Button (kein Fund, keine Punkte). */
+  if(!cands||!cands.length||cands[0]&&cands[0].reject){
+    const r=(cands&&cands[0])||{de:'Kein Lebewesen erkannt',hint:'Bitte eine Pflanze, ein Tier oder einen Pilz fotografieren.'};
+    openModal(`<div style="text-align:center"><div style="font-size:40px;margin-bottom:6px">🔎</div>
+      <h3>${esc(r.de)}</h3>
+      <div class="mini muted" style="margin:8px 0 14px">${esc(r.hint||'')}</div>
+      <button class="btn btn-em" onclick="closeModal();go('scan')">Neues Foto</button>
+      <button class="btn btn-ghost" style="margin-top:8px" onclick="closeModal()">Schließen</button></div>`);
+    window._cands=cands;return;
+  }
   openModal(`<h3>Vorschläge · ${esc(provider)}</h3><div class="mini muted" style="margin:4px 0 12px">Bitte bestätige die richtige Art (du entscheidest):</div>
     ${cands.map((c,i)=>`<button class="q-opt" onclick="confirmSpecies(${i})">
       ${c.photo?`<img src="${c.photo}" style="width:40px;height:40px;border-radius:8px;object-fit:cover">`:`<span style="font-size:26px">${c.emoji}</span>`}
@@ -1238,7 +1317,9 @@ async function inatQuery(q){$('inatRes').innerHTML='<div class="spinner"></div>'
   }catch(e){$('inatRes').innerHTML='<div class="mini muted">Offline oder Fehler – bitte Demo-Anbieter nutzen.</div>';}
 }
 async function confirmSpecies(i){
-  const c=window._cands[i];closeModal();
+  const c=window._cands[i];
+  if(!c||c.reject){closeModal();toast('Bitte ein Lebewesen (Pflanze/Tier/Pilz) fotografieren.');return;}
+  closeModal();
   openModal('<div style="text-align:center"><div class="spinner"></div><div class="muted mini">Standort & Steckbrief werden erfasst …</div></div>');
   let pos=null;try{pos=await getPosition();}catch(e){}
   let info={},env=null,gbif=null,area=null;
@@ -1332,16 +1413,19 @@ async function saveMissionProof(id){
 
 /* ============================ QUIZ / LERNEN ============================ */
 function pick(arr,n){const c=arr.slice();for(let i=c.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[c[i],c[j]]=[c[j],c[i]];}return n?c.slice(0,n):c;}
-/* Spaced Repetition: früher falsch beantwortete Arten häufiger abfragen. */
-function pickQuizSpecies(){
-  const pool=quizPool();
+/* Spaced Repetition: früher falsch beantwortete Arten häufiger abfragen.
+   `exclude` = Arten, die in dieser Quiz-Runde schon dran waren → keine Wiederholung. */
+function pickQuizSpecies(exclude){
+  exclude=exclude||[];
+  let pool=quizPool().filter(x=>exclude.indexOf(x.key)<0);
+  if(!pool.length)pool=quizPool(); // Notfall: Katalog kleiner als Fragenzahl → wieder alle zulassen
   const wrong=(S.wrongPool||[]).map(k=>pool.find(x=>x.key===k)).filter(Boolean);
   if(wrong.length&&Math.random()<0.45)return pick(wrong,1)[0];
   return pick(pool,1)[0];
 }
-function makeQuestion(mode){
+function makeQuestion(mode,exclude){
   const n=gradeOpts()-1; // Anzahl Distraktoren je nach Altersstufe (2 oder 3)
-  const s=pickQuizSpecies();let q,correct,opts;
+  const s=pickQuizSpecies(exclude);let q,correct,opts;
   if(mode==='habitat'){q='In welchem Lebensraum findest du '+s.de+'?';correct=s.biome;
     opts=pick([...new Set(SPECIES.map(x=>x.biome))].filter(b=>b!==correct),n).concat(correct);}
   else if(mode==='where'){q='Wo kommt '+s.de+' hauptsächlich vor?';correct=s.cont;
@@ -1352,8 +1436,11 @@ function makeQuestion(mode){
   return {emoji:s.emoji,q,opts:pick(opts),correct,fact:s.fact,mode,key:s.key};
 }
 let QZ=null;
-function startQuiz(mode){QZ={mode,i:0,n:5,right:0,daily:false,marks:[]};nextQ();}
-function startDaily(){QZ={mode:'mix',i:0,n:5,right:0,daily:true,marks:[]};nextQ();}
+function startQuiz(mode){QZ={mode,i:0,n:5,right:0,daily:false,marks:[],used:[]};nextQ();}
+function startDaily(){QZ={mode:'mix',i:0,n:5,right:0,daily:true,marks:[],used:[]};nextQ();}
+/* Vorlesen für das Quiz: Frage + Antwortmöglichkeiten bzw. die Auflösung. */
+function speakQuestion(){if(!QZ||!QZ.cur)return;speak(QZ.cur.q+'. Antwortmöglichkeiten: '+QZ.cur.opts.join(', ')+'.');}
+function speakAnswer(){if(!QZ||!QZ.cur)return;speak('Die richtige Antwort ist: '+QZ.cur.correct+'. '+(QZ.cur.fact||''));}
 /* Teilbares Emoji-Ergebnis (GeoQuest-Idee, datenschutzfreundlich – keine Konten/Namen). */
 function shareDaily(){
   const marks=(QZ.marks||[]).map(m=>m?'🟩':'⬜').join('');
@@ -1362,12 +1449,12 @@ function shareDaily(){
   else if(navigator.clipboard){navigator.clipboard.writeText(txt);toast('Ergebnis kopiert!');}
   else toast(txt);
 }
-function speakQuestion(){if(!QZ||!QZ.cur)return;speak(QZ.cur.q+'. Antwortmöglichkeiten: '+QZ.cur.opts.join(', ')+'.');}
-function speakAnswer(){if(!QZ||!QZ.cur)return;speak('Die richtige Antwort ist: '+QZ.cur.correct+'. '+(QZ.cur.fact||''));}
 function nextQ(){
   if(QZ.i>=QZ.n)return endQuiz();
   const m=QZ.mode==='mix'?pick(['habitat','where','status','name'],1)[0]:QZ.mode;
-  QZ.cur=makeQuestion(m);
+  QZ.used=QZ.used||[];
+  QZ.cur=makeQuestion(m,QZ.used);
+  if(QZ.cur&&QZ.cur.key)QZ.used.push(QZ.cur.key); // in dieser Runde nicht noch einmal
   openModal(`<div class="row" style="justify-content:space-between;margin-bottom:8px"><span class="mini" style="font-weight:800;color:var(--em-d)">${QZ.daily?'Tägliche Challenge':'Quiz'} · ${QZ.i+1}/${QZ.n}</span><span class="row" style="gap:8px;align-items:center"><span class="mini muted">✓ ${QZ.right}</span><button class="btn btn-ghost btn-sm" style="width:auto;padding:2px 10px" onclick="closeModal()" title="Quiz beenden">✕</button></span></div>
     <div class="q-emoji">${QZ.cur.emoji}</div><h3 style="text-align:center;margin-bottom:6px">${esc(QZ.cur.q)}</h3>
     <div style="text-align:center;margin-bottom:12px"><button class="btn btn-ghost btn-sm" style="width:auto" onclick="speakQuestion()">🔊 Frage &amp; Antworten vorlesen</button></div>
@@ -1672,8 +1759,25 @@ function openMap(){
 }
 
 /* ============================ Supabase-Cloud-Sync (optional, per Config) ============================ */
-function supaCfg(){return S.supabase||{url:'',key:''};}
+/* ===== Zentrale BIOGLOW-Cloud =====================================================
+   Einmal hier eintragen → dann muss NIEMAND mehr etwas einrichten. Alle, die die App
+   öffnen, sind automatisch mit derselben Datenbank verbunden und bilden Gruppen nur
+   noch über einen frei wählbaren Gruppencode. Der anon-/publishable-Key ist ein
+   ÖFFENTLICHER Schlüssel (durch Supabase Row Level Security abgesichert) und darf
+   in der App stehen – genau dafür ist er gedacht. */
+const BIOGLOW_CLOUD = {
+  url: 'https://supabase.arndt-software.de',
+  key: ''   /* <<< HIER den Supabase anon/publishable Key eintragen → zentrale Cloud ist aktiv */
+};
+function supaCfg(){
+  const s=S.supabase||{};
+  if(s.url&&s.key)return {url:s.url,key:s.key};                                  // eigene Cloud hat Vorrang
+  if(BIOGLOW_CLOUD.url&&BIOGLOW_CLOUD.key)return {url:BIOGLOW_CLOUD.url,key:BIOGLOW_CLOUD.key}; // sonst zentrale Cloud
+  return {url:s.url||'',key:s.key||''};
+}
 function supaOn(){const c=supaCfg();return !!(c.url&&c.key);}
+/* Ist die zentrale (eingebaute) Cloud im Einsatz – nicht eine selbst eingetragene? */
+function usingCentralCloud(){const s=S.supabase||{};return !(s.url&&s.key)&&!!(BIOGLOW_CLOUD.url&&BIOGLOW_CLOUD.key);}
 async function supaSync(o){
   const c=supaCfg();if(!c.url||!c.key)return false;
   try{
@@ -1731,9 +1835,11 @@ function onClassInput(val){S.classCode=(val||'').trim();saveSettings();}
    Lehrkraft richtet einmal ein & teilt den Code; Kinder fügen ihn ein → Cloud fertig. */
 function joinCodeStr(){const c=supaCfg();return btoa(unescape(encodeURIComponent(JSON.stringify({u:c.url,k:c.key,c:S.classCode||''}))));}
 function applyClassCode(v){
-  try{const o=JSON.parse(decodeURIComponent(escape(atob((v||'').trim()))));if(!o.u||!o.k)throw 0;
+  v=(v||'').trim();
+  if(!v){toast('Bitte zuerst den Beitritts-Code ins Feld einfügen.');return;}
+  try{const o=JSON.parse(decodeURIComponent(escape(atob(v))));if(!o.u||!o.k)throw 0;
     S.supabase={url:o.u,key:o.k};S.classCode=o.c||'';saveSettings();closeModal();render();toast('Klasse verbunden! ☁️');}
-  catch(e){toast('Ungültiger Code.');}
+  catch(e){toast('Dieser Code ist unvollständig. Bitte den ganzen Code von der Lehrkraft kopieren und einfügen.');}
 }
 function shareClassCode(){
   if(!supaOn()){toast('Erst Cloud einrichten (Felder unten).');return;}
@@ -2386,12 +2492,20 @@ function tglRow(label,desc,on,fn){
 /* ============================ COMMUNITY-AKTIONEN (BUND, Gruppen, selbst erstellen) ============================ */
 function allMissions(){return MISSIONS.concat(S.customMissions||[]);}
 function addCustomMission(){
+  const cloud=supaOn();
+  const cloudBanner=cloud
+    ? '<div class="mini" style="margin:4px 0 10px;color:var(--em-d)">☁️ Cloud aktiv'+(S.classCode?(' · Gruppe „'+esc(S.classCode)+'"'):'')+' – „Gruppe"/„Öffentlich" funktioniert.</div>'
+    : '<div class="banner" style="background:#7c2d12;color:#fff;margin:4px 0 10px"><div class="ic">⚠️</div><div class="mini"><b>Ohne Cloud sehen andere die Aktion NICHT.</b> „Nur ich" bleibt auf diesem Gerät. Zum Teilen einmalig die Cloud einrichten: Profil → Klasse & Cloud → mit Klassen-Code beitreten (oder Lehrkraft-Bereich).</div></div>';
   openModal('<h3>🤝 Aktion erstellen & teilen</h3><div class="mini muted" style="margin:4px 0 10px">Z. B. eine <b>Gewässersäuberung</b> oder Müllsammel-Aktion – für Klasse, AG, Schule oder Verein.</div>'
+    +cloudBanner
     +'<label class="fld">Titel</label><input type="text" id="cmTitle" placeholder="z. B. Müllsammeln am Bach">'
     +'<label class="fld">Kurzbeschreibung (Was? Wo? Wann?)</label><input type="text" id="cmDesc" placeholder="Sa 10 Uhr, Treffpunkt Brücke">'
-    +'<label class="fld">Mit wem teilen?</label><select id="cmScope"><option value="private">Nur ich (lokal)</option><option value="group">Meine Gruppe (per Code)</option><option value="public">Öffentlich – alle im Umkreis</option></select>'
+    +'<label class="fld">Mit wem teilen?</label><select id="cmScope">'
+      +'<option value="private">Nur ich (lokal)</option>'
+      +'<option value="group"'+(cloud?'':' disabled')+'>Meine Gruppe (per Code)'+(cloud?'':' – Cloud nötig')+'</option>'
+      +'<option value="public"'+(cloud?'':' disabled')+'>Öffentlich – alle im Umkreis'+(cloud?'':' – Cloud nötig')+'</option></select>'
     +'<label class="fld">Umkreis (bei „öffentlich")</label><select id="cmRadius"><option value="2">2 km</option><option value="5" selected>5 km</option><option value="10">10 km</option><option value="25">25 km</option></select>'
-    +'<div class="mini muted" style="margin-top:6px">Teilen braucht die Cloud (Profil → Cloud-Sync). „Gruppe" nutzt deinen Gruppen-/Klassencode – nur wer ihn hat, sieht die Aktion. „Öffentlich" sehen alle App-Nutzer:innen im Umkreis. Mitmachen ist immer freiwillig (Opt-in).</div>'
+    +'<div class="mini muted" style="margin-top:6px">„Gruppe" nutzt deinen Gruppen-/Klassencode – nur wer ihn hat, sieht die Aktion. „Öffentlich" sehen alle App-Nutzer:innen im Umkreis. Mitmachen ist immer freiwillig (Opt-in).</div>'
     +'<button class="btn btn-primary" style="margin-top:10px" onclick="saveCustomMission()">Aktion anlegen</button>'
     +'<button class="btn btn-ghost" style="margin-top:8px" onclick="closeModal()">Abbrechen</button>');
 }
