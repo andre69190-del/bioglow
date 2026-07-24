@@ -1362,13 +1362,15 @@ function shareDaily(){
   else if(navigator.clipboard){navigator.clipboard.writeText(txt);toast('Ergebnis kopiert!');}
   else toast(txt);
 }
+function speakQuestion(){if(!QZ||!QZ.cur)return;speak(QZ.cur.q+'. Antwortmöglichkeiten: '+QZ.cur.opts.join(', ')+'.');}
+function speakAnswer(){if(!QZ||!QZ.cur)return;speak('Die richtige Antwort ist: '+QZ.cur.correct+'. '+(QZ.cur.fact||''));}
 function nextQ(){
   if(QZ.i>=QZ.n)return endQuiz();
   const m=QZ.mode==='mix'?pick(['habitat','where','status','name'],1)[0]:QZ.mode;
   QZ.cur=makeQuestion(m);
   openModal(`<div class="row" style="justify-content:space-between;margin-bottom:8px"><span class="mini" style="font-weight:800;color:var(--em-d)">${QZ.daily?'Tägliche Challenge':'Quiz'} · ${QZ.i+1}/${QZ.n}</span><span class="row" style="gap:8px;align-items:center"><span class="mini muted">✓ ${QZ.right}</span><button class="btn btn-ghost btn-sm" style="width:auto;padding:2px 10px" onclick="closeModal()" title="Quiz beenden">✕</button></span></div>
     <div class="q-emoji">${QZ.cur.emoji}</div><h3 style="text-align:center;margin-bottom:6px">${esc(QZ.cur.q)}</h3>
-    <div style="text-align:center;margin-bottom:12px"><button class="btn btn-ghost btn-sm" style="width:auto" onclick="speak('${esc(QZ.cur.q).replace(/'/g,"\\'")}')">🔊 Vorlesen</button></div>
+    <div style="text-align:center;margin-bottom:12px"><button class="btn btn-ghost btn-sm" style="width:auto" onclick="speakQuestion()">🔊 Frage &amp; Antworten vorlesen</button></div>
     <div id="qOpts">${QZ.cur.opts.map(o=>`<button class="q-opt" onclick="answer(this,'${esc(o).replace(/'/g,"\\'")}')">${esc(o)}</button>`).join('')}</div>`);
 }
 function answer(btn,val){
@@ -1381,7 +1383,7 @@ function answer(btn,val){
     if(val===correct)S.wrongPool=S.wrongPool.filter(k=>k!==QZ.cur.key);
     else if(S.wrongPool.indexOf(QZ.cur.key)<0){S.wrongPool.push(QZ.cur.key);if(S.wrongPool.length>30)S.wrongPool.shift();}
     saveSettings();}
-  const box=document.createElement('div');box.innerHTML=`<div class="mini" style="background:var(--s50);border-radius:12px;padding:10px;margin-top:10px">${val===correct?'✅ Richtig! ':'❌ '}${esc(QZ.cur.fact)}</div><button class="btn btn-primary" style="margin-top:10px" onclick="QZ.i++;nextQ()">${QZ.i+1>=QZ.n?'Ergebnis':'Weiter'}</button>`;
+  const box=document.createElement('div');box.innerHTML=`<div class="mini" style="background:var(--s50);border-radius:12px;padding:10px;margin-top:10px">${val===correct?'✅ Richtig! ':'❌ '}${esc(QZ.cur.fact)}</div><button class="btn btn-ghost btn-sm" style="width:auto;margin-top:8px" onclick="speakAnswer()">🔊 Auflösung vorlesen</button><button class="btn btn-primary" style="margin-top:10px" onclick="QZ.i++;nextQ()">${QZ.i+1>=QZ.n?'Ergebnis':'Weiter'}</button>`;
   $('qOpts').after(box);
 }
 function endQuiz(){

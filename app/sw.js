@@ -3,7 +3,7 @@
  * Same-origin: network-first (online frisch, offline aus Cache).
  * Fremde APIs (iNaturalist/GBIF/Wikipedia): nur Netz, nichts cachen.
  */
-const CACHE = 'bioglow-2';
+const CACHE = 'bioglow-3';
 const SHELL = ['./', './index.html', './manifest.json', './icon.svg'];
 
 self.addEventListener('install', (e) => {
