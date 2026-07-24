@@ -640,13 +640,18 @@ function demoIdentify(dataUrl){
    unterschiedlich aussehen und nicht beide nur 🐸 zeigen). Ergebnis wird gecacht.
    Offline → kein Bild, dann greift automatisch das Emoji als Rückfall. */
 /* Echtes Foto einer Art holen. Quelle 1: iNaturalist (sehr zuverlässig für Arten),
-   Quelle 2 (Rückfall): Wikipedia. Ergebnis wird gecacht. Offline → null → Emoji-Rückfall. */
-const _photoCache={};
+   Quelle 2 (Rückfall): Wikipedia. URLs werden DAUERHAFT gecacht (localStorage) → beim
+   nächsten Mal kein API-Aufruf mehr, das Bild lädt sofort. Offline → Emoji-Rückfall.
+   Wir holen bewusst KLEINE Bilder (schneller): iNat "small" (240px) statt "medium". */
+let _photoCache={};
+try{_photoCache=JSON.parse(localStorage.getItem('bioglow_photos')||'{}');}catch(e){_photoCache={};}
+let _photoSaveT=null;
+function _savePhotoCache(){clearTimeout(_photoSaveT);_photoSaveT=setTimeout(()=>{try{localStorage.setItem('bioglow_photos',JSON.stringify(_photoCache));}catch(e){}},400);}
 async function inatPhoto(sci){
   try{
     const r=await fetch('https://api.inaturalist.org/v1/taxa?q='+encodeURIComponent(sci)+'&per_page=1&locale='+(S.lang||'de'));
     if(r.ok){const j=await r.json();const t=j.results&&j.results[0];
-      const p=t&&t.default_photo;const u=p&&(p.medium_url||p.square_url||p.url);return u||null;}
+      const p=t&&t.default_photo;const u=p&&(p.small_url||p.square_url||p.medium_url||p.url);return u||null;}
   }catch(e){}
   return null;
 }
@@ -659,10 +664,23 @@ async function wikiPhoto(sci){
 }
 async function speciesPhoto(sci){
   if(!sci)return null;
-  if(sci in _photoCache)return _photoCache[sci];
+  if(sci in _photoCache)return _photoCache[sci];   // sofort aus dem dauerhaften Cache
   let u=null;
   if(online()){u=await inatPhoto(sci);if(!u)u=await wikiPhoto(sci);}
-  _photoCache[sci]=u||null;return u||null;
+  if(u!=null){_photoCache[sci]=u;_savePhotoCache();} // nur echte Treffer dauerhaft merken
+  return u||null;
+}
+/* Beim Start im Hintergrund alle Katalog-Fotos vorladen: erst die URL cachen, dann das
+   Bild in den Browser-Cache holen. Danach erscheinen Quiz-/Scan-Bilder praktisch sofort. */
+let _prewarmDone=false;
+async function prewarmPhotos(){
+  if(_prewarmDone||!online()||typeof SPECIES==='undefined')return;_prewarmDone=true;
+  for(const s of SPECIES){
+    if(!s.sci)continue;
+    let u=_photoCache[s.sci];
+    if(u===undefined){u=await speciesPhoto(s.sci);await new Promise(r=>setTimeout(r,140));} // API schonen
+    if(u){try{const im=new Image();im.decoding='async';im.src=u;}catch(e){}}            // Bytes vorladen
+  }
 }
 /* Kompatibilität: alter Name, wird an mehreren Stellen genutzt. */
 async function wikiThumb(sci){return speciesPhoto(sci);}
@@ -2702,6 +2720,8 @@ function finishOnboard(mode){
   if((location.hash||'').indexOf('#s=')===0){handleStationHash();}
   else{maybeOnboard();}
   if(typeof computeSmartTip==='function'){computeSmartTip().then(()=>{if(TAB==='home')render();}).catch(()=>{});}
+  /* Katalog-Fotos im Hintergrund vorladen (verzögert, damit der Start flüssig bleibt). */
+  setTimeout(()=>{try{prewarmPhotos();}catch(e){}},2500);
 })();
 </script>
 </body>
