@@ -286,7 +286,7 @@ const IDB = (()=>{
 /* ---------- Einstellungen (localStorage) ---------- */
 const LS='bioglow-settings';
 function loadSettings(){try{return Object.assign(defSettings(),JSON.parse(localStorage.getItem(LS)||'{}'));}catch(e){return defSettings();}}
-function defSettings(){return {mode:'explorer',provider:'demo',keys:{plantnet:'',kindwise:'',birdnet:''},streak:0,lastDaily:'',dailyBest:0,grade:'3',supabase:{url:'',key:''},classCode:'',theme:'none',blitz:null,customMissions:[],stations:[],wrongPool:[],name:'Forscher:in',dark:false,bigText:false,cb:false,easy:false,useGps:true,fuzzAll:false,publicDefault:false,pin:'',blitzMin:15,lang:'de',aiAsked:false,gemmaUrl:'',period:30,devMode:false};}
+function defSettings(){return {mode:'explorer',provider:'demo',keys:{plantnet:'',kindwise:'',birdnet:''},streak:0,lastDaily:'',dailyBest:0,grade:'3',supabase:{url:'',key:''},classCode:'',theme:'none',blitz:null,customMissions:[],stations:[],wrongPool:[],name:'Forscher:in',dark:false,bigText:false,cb:false,easy:false,useGps:true,fuzzAll:false,publicDefault:false,pin:'',blitzMin:15,lang:'de',aiAsked:false,gemmaUrl:'',period:30,devMode:false,onbVariant:'',onbRating:'',onbHide:true,surveyDone:false};}
 let S = loadSettings();
 function saveSettings(){try{localStorage.setItem(LS,JSON.stringify(S));}catch(e){}}
 
@@ -936,6 +936,35 @@ async function enrich(sci,lat,lng){
 }
 
 /* ============================ RENDER: SCREENS ============================ */
+/* ── Baustein „Begriffe entschärfen": Kinder-Erklärungen + (i)-Punkte ── */
+const GLOSSARY={
+  'Natur-Gesundheit':'Zeigt, wie gesund ein Lebensraum ist. Viele verschiedene Arten = meist gesünder. 100 = super, 0 = stark belastet.',
+  'Habitat':'Habitat = der Lebensraum, in dem Tiere und Pflanzen wohnen.',
+  'Shannon':'Ein Mathe-Wert für Vielfalt: viele Arten UND gleichmäßig verteilt = hoher Wert.',
+  'Biodiversität':'Biodiversität = die Vielfalt an Tieren, Pflanzen und Lebensräumen.',
+  'Citizen Science':'Bürgerforschung: alle helfen mit, echte Daten für die Wissenschaft zu sammeln.',
+  'Bestäuber':'Tiere wie Bienen und Schmetterlinge, die Blüten bestäuben.',
+  'GBIF':'Eine große weltweite Datenbank für Naturbeobachtungen.',
+  'Monitoring':'Beobachten, wie sich die Natur über die Zeit verändert.'
+};
+function infoTip(term){const d=GLOSSARY[term]||term;openModal('<div style="text-align:center"><div class="q-emoji">💡</div><h3>'+esc(term)+'</h3><div class="mini" style="background:var(--s50);border-radius:12px;padding:12px;margin:8px 0 12px;line-height:1.6;text-align:left">'+esc(d)+'</div><button class="btn btn-primary" onclick="closeModal()">Verstanden</button></div>');}
+function iDot(term){return '<span onclick="event.stopPropagation();infoTip(\''+String(term).replace(/'/g,'')+'\')" style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;background:var(--em-soft);color:var(--em-deep);font-size:11px;font-weight:800;cursor:pointer;margin-left:5px" title="Was ist das?">i</span>';}
+/* „Warum dieser Wert?" – die Natur-Gesundheit aus echten Zahlen erklärt. */
+function openScoreWhy(){
+  const val=validated();const sp=new Set(val.map(o=>o.speciesKey)).size;const sh=shannon();
+  const impactSum=val.reduce((a,o)=>a+(o.scoreImpact||0),0);const s=score();
+  openModal('<h3>📊 Warum dieser Wert?</h3>'
+    +'<div class="mini muted" style="margin:4px 0 10px">Deine Natur-Gesundheit entsteht so aus deinen geprüften Funden:</div>'
+    +'<div style="background:var(--s50);border-radius:12px;padding:12px;line-height:2;font-size:14px">'
+      +'Startwert: <b>'+RULES.base+'</b><br>'
+      +'+ geprüfte Funde ('+val.length+'): <b>+'+impactSum+'</b><br>'
+      +'Verschiedene Arten: <b>'+sp+'</b><br>'
+      +'Vielfalt (Shannon): <b>'+sh.toFixed(2)+'</b>'+iDot('Shannon')+'<br>'
+      +'<div style="border-top:1px solid var(--s200);margin:6px 0"></div>'
+      +'= Natur-Gesundheit: <b style="color:var(--score)">'+s+'</b> / 100</div>'
+    +'<div class="mini muted" style="margin-top:10px">Tipp: Vor allem <b>verschiedene</b> Arten und erledigte <b>Missionen</b> heben den Wert. Zehnmal dieselbe Art zählt weniger als zehn unterschiedliche.</div>'
+    +'<button class="btn btn-primary" style="margin-top:12px" onclick="closeModal()">Alles klar</button>');
+}
 function ringSvg(val){const r=66,c=2*Math.PI*r,off=c*(1-val/100);
   return '<svg width="170" height="170" viewBox="0 0 170 170"><circle cx="85" cy="85" r="'+r+'" stroke="#e2e8f0" stroke-width="15" fill="none"/><circle cx="85" cy="85" r="'+r+'" stroke="#10b981" stroke-width="15" fill="none" stroke-linecap="round" stroke-dasharray="'+c.toFixed(1)+'" stroke-dashoffset="'+off.toFixed(1)+'" transform="rotate(-90 85 85)"/></svg>';}
 function trendSvg(){const d=trend(),W=300,H=90,pad=8,vals=d.map(x=>x.v),mn=Math.min(...vals)-5,mx=Math.max(...vals)+5,step=(W-pad*2)/(d.length-1);
@@ -957,9 +986,10 @@ function screenHome(){
       <button class="btn btn-ghost btn-sm" style="width:auto" onclick="speak('So einfach geht es. Erstens: Auf Scannen tippen. Zweitens: Ein Foto machen. Drittens: Das Tier oder die Pflanze auswählen. Viertens: Fertig. Du hilfst der Natur.')">🔊</button></div></div>`:''}
     <div class="card" onclick="openThemes()" style="cursor:pointer;margin-bottom:14px"><div class="row" style="justify-content:space-between"><div class="row"><div style="font-size:24px">🎯</div><div><b>Thema: ${esc(themeOf().t)}</b><div class="mini muted">${esc(themeOf().d)}</div></div></div><span class="chip chip-em">Ändern ›</span></div></div>
     <div class="card">
-      <div class="score-head"><h2 style="font-size:15px">Habitat Health Score</h2><span class="chip ${st[1]}">${st[0]}</span></div>
-      <div class="ring-wrap"><div class="ring">${ringSvg(v)}<div class="ctr"><div class="num">${v}</div><div class="unit">von 100</div></div></div></div>
-      <div class="mini muted" style="text-align:center">Live aus ${validated().length} geprüften Funden · Biodiversität (Shannon) <b>${shannon().toFixed(2)}</b></div>
+      <div class="score-head"><h2 style="font-size:15px">Natur-Gesundheit 🌿 <span class="muted" style="font-weight:600;font-size:12px">(Habitat-Score)</span>${iDot('Natur-Gesundheit')}</h2><span class="chip ${st[1]}">${st[0]}</span></div>
+      <div class="ring-wrap" onclick="openScoreWhy()" style="cursor:pointer"><div class="ring">${ringSvg(v)}<div class="ctr"><div class="num">${v}</div><div class="unit">von 100</div></div></div></div>
+      <div class="mini muted" style="text-align:center">Live aus ${validated().length} geprüften Funden · Vielfalt (Shannon) <b>${shannon().toFixed(2)}</b>${iDot('Shannon')}</div>
+      <div class="mini" style="text-align:center;margin-top:4px"><span onclick="openScoreWhy()" style="color:var(--em-d);cursor:pointer;text-decoration:underline">Warum dieser Wert?</span></div>
       <div class="mini" style="text-align:center;margin-top:6px;color:var(--em-d)">${v<67?`🤝 Gemeinsam aufgebaut – noch <b>${67-v}</b> Punkte bis „Gesunder Park"`:'🎉 „Gesunder Park" erreicht – gemeinsam geschafft!'}${supaOn()?'':' · <span class="muted">mit Cloud teilt ihr den Score in der Gruppe</span>'}</div>
       ${researchCount()>0?`<div class="mini" style="text-align:center;margin-top:4px"><span class="chip chip-em">⭐ ${researchCount()} in Forschungsqualität</span></div>`:''}
       <div class="stat-row">
@@ -1114,11 +1144,12 @@ function screenProfile(){
   const prov=PROVIDERS[S.provider];
   return `<div class="screen">
     <div class="card" style="background:#0f172a;color:#fff;border:none">
-      <div class="row" style="justify-content:space-between"><div><div class="mini" style="opacity:.7;font-weight:800">BIOGLOW Hüter:in</div><h2 style="color:#fff;margin-top:2px">${esc(S.name)}</h2></div><div style="width:48px;height:48px;border-radius:14px;background:var(--em);color:#052e1c;font-weight:900;font-size:20px;display:flex;align-items:center;justify-content:center">${lvl}</div></div>
-      <div class="row" style="justify-content:space-between;margin:14px 0 6px"><span class="mini" style="opacity:.7;font-weight:800">LEVEL ${lvl}</span><span class="mini" style="opacity:.7;font-weight:800">${into}/500 XP</span></div>
+      <div class="row" style="justify-content:space-between"><div><div class="mini" style="opacity:.7;font-weight:800">🌿 ${esc(levelName(lvl))}</div><h2 style="color:#fff;margin-top:2px">${esc(S.name)}</h2></div><div style="width:48px;height:48px;border-radius:14px;background:var(--em);color:#052e1c;font-weight:900;font-size:20px;display:flex;align-items:center;justify-content:center">${lvl}</div></div>
+      <div class="row" style="justify-content:space-between;margin:14px 0 6px"><span class="mini" style="opacity:.7;font-weight:800">LEVEL ${lvl} · ${esc(levelName(lvl))}</span><span class="mini" style="opacity:.7;font-weight:800">${into}/500 XP</span></div>
       <div style="height:8px;border-radius:999px;background:#1e293b;overflow:hidden"><div style="height:100%;width:${pct}%;background:var(--em);border-radius:999px"></div></div>
-      <div class="mini" style="opacity:.6;margin-top:6px">${xp()} XP gesamt · ${OBS.length} Beobachtungen</div>
+      <div class="mini" style="opacity:.6;margin-top:6px">Noch <b>${500-into} XP</b> bis Level ${lvl+1} („${esc(levelName(lvl+1))}") · ${xp()} XP gesamt</div>
     </div>
+    <div class="card" onclick="openNaturebook()" style="cursor:pointer;margin-top:12px"><div class="row" style="justify-content:space-between"><div class="row"><div style="font-size:24px">📖</div><div><b>Naturbuch</b><div class="mini muted">${nbFound()} von ${SPECIES.length} Arten entdeckt – finde sie alle!</div></div></div><span class="chip chip-em">Ansehen ›</span></div></div>
 
     <div class="sec-title"><h2>KI-Quelle</h2></div>
     <div class="card">
@@ -1178,6 +1209,7 @@ function screenProfile(){
 
     <div class="sec-title"><h2>Hilfe</h2></div>
     <button class="btn btn-ghost" onclick="openFeedback()">🐞 Fehler / Feedback melden</button>
+    <button class="btn btn-ghost" style="margin-top:10px" onclick="openSurvey()">📋 Kurze Umfrage (hilft der Forschung)</button>
     <button class="btn btn-ghost" style="margin-top:10px" onclick="openHelp()">❓ Hilfe & geführte Tour</button>
     <button class="btn btn-ghost" style="margin-top:10px" onclick="openLegal()">⚖️ Impressum & Datenschutz</button>
 
@@ -1421,7 +1453,9 @@ async function confirmSpecies(i){
   rec.xp=RULES.scanXp+(verdict.status==='validated'?baseImpact*2:0);
   rec.info=info;rec.env=env;rec.gbif=gbif;rec.area=area;
   rec.green=window._analysis&&window._analysis.green;rec.isAudio=!!window._isAudio;
+  const _prevLvl=level();
   await IDB.add(rec);OBS.push(rec);
+  window._lvlUp=level()>_prevLvl;
   if(supaOn())supaSync(rec).then(ok=>{if(ok)toast('☁️ In die Cloud synchronisiert.');});
   window._isAudio=false;
   bumpStreak();
@@ -1450,12 +1484,61 @@ function _qualBlock(rec){
   const q=qualityGrade(rec),col=q.grade==='A'?'var(--em)':q.grade==='B'?'#f59e0b':'#f43f5e';
   return '<div class="mini" style="margin-bottom:12px;background:var(--s50);border-radius:12px;padding:10px"><div class="row" style="justify-content:space-between;margin-bottom:6px"><span><b>Beobachtungsqualität</b> <span class="muted">(für Citizen Science)</span></span><span style="font-weight:900;color:'+col+';font-size:16px">Note '+q.grade+'</span></div>'+q.crit.map(function(k){return '<div class="check-line"><span class="ci">'+(k.ok?'✅':'▫️')+'</span><span>'+esc(k.label)+'</span></div>';}).join('')+'</div>';
 }
+/* Level-Namen (Baustein „Level & Sammeln"). */
+const LEVEL_NAMES=['Frischling','Spürnase','Naturforscher:in','Artenkenner:in','Artenexpert:in','Öko-Profi','Habitat-Held:in','BIOGLOW-Meister:in'];
+function levelName(l){return LEVEL_NAMES[Math.min((l||1)-1,LEVEL_NAMES.length-1)]||'Forscher:in';}
+/* Naturbuch (Sammlung): wie viele Katalog-Arten hast du schon entdeckt? */
+function nbFound(){const f=new Set(OBS.filter(o=>o.source==='scan').map(o=>o.speciesKey));return SPECIES.filter(s=>f.has(s.key)).length;}
+function openNaturebook(){
+  const f=new Set(OBS.filter(o=>o.source==='scan').map(o=>o.speciesKey));
+  const got=SPECIES.filter(s=>f.has(s.key)).length;
+  const grid=SPECIES.map(s=>{const has=f.has(s.key);
+    return '<div onclick="'+(has?'closeModal();infoSpecies(\''+s.key+'\')':'')+'" style="text-align:center;padding:8px 4px;border-radius:12px;background:'+(has?'var(--em-tint)':'var(--s50)')+';opacity:'+(has?'1':'.5')+';cursor:'+(has?'pointer':'default')+'">'
+      +'<div style="font-size:26px">'+(has?s.emoji:'❓')+'</div>'
+      +'<div class="mini" style="font-weight:700;margin-top:2px">'+(has?esc(s.de):'???')+'</div></div>';
+  }).join('');
+  openModal('<h3>📖 Naturbuch</h3><div class="mini muted" style="margin:4px 0 10px">Du hast <b>'+got+'</b> von <b>'+SPECIES.length+'</b> Arten entdeckt. Finde sie alle! 🌟</div>'
+    +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-height:52vh;overflow:auto">'+grid+'</div>'
+    +'<button class="btn btn-primary" style="margin-top:12px" onclick="closeModal();go(\'scan\')">📷 Neue Art finden</button>'
+    +'<button class="btn btn-ghost" style="margin-top:8px" onclick="closeModal()">Schließen</button>');
+}
+/* Kurzer Steckbrief einer entdeckten Art (aus dem Naturbuch). */
+function infoSpecies(key){const s=SP_BY_KEY[key];if(!s)return;
+  openModal('<div style="text-align:center"><div style="font-size:44px">'+s.emoji+'</div><h3>'+esc(s.de)+'</h3><div class="mini muted" style="font-style:italic">'+esc(s.sci)+'</div></div>'
+    +'<div class="mini" style="background:var(--em-tint);border:1px solid var(--em-soft);border-radius:12px;padding:10px;margin:10px 0"><b>💡 Wusstest du?</b> '+esc(s.fact)+'</div>'
+    +'<div class="mini muted">Gruppe: '+esc(s.grp)+' · Lebensraum: '+esc(s.biome)+' · Status: '+esc(s.rar)+'</div>'
+    +'<button class="btn btn-primary" style="margin-top:12px" onclick="openNaturebook()">‹ Zurück zum Naturbuch</button>');
+}
+/* 🎉 Kleine Feier: sanfter Ton + Konfetti + optional Level-Up. Gegen Reizüberflutung
+   kurz gehalten; Ton nur, wenn nicht ausgeschaltet (S.sound !== false). */
+function celebrate(opts){
+  opts=opts||{};
+  if(!document.getElementById('bgConfCss')){const st=document.createElement('style');st.id='bgConfCss';
+    st.textContent='@keyframes bgConf{0%{transform:translateY(-20px) rotate(0);opacity:1}100%{transform:translateY(104vh) rotate(360deg);opacity:.15}}';document.head.appendChild(st);}
+  try{ if(S.sound!==false){ const ac=new (window.AudioContext||window.webkitAudioContext)();const now=ac.currentTime;
+    [523.25,659.25,783.99].forEach((f,i)=>{const t=now+i*0.12;const o=ac.createOscillator(),g=ac.createGain();o.type='sine';o.frequency.value=f;o.connect(g);g.connect(ac.destination);
+      g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(0.14,t+0.02);g.gain.exponentialRampToValueAtTime(0.0001,t+0.18);o.start(t);o.stop(t+0.2);});
+    setTimeout(()=>{try{ac.close();}catch(e){}},700);
+  } }catch(e){}
+  try{
+    const wrap=document.createElement('div');wrap.style.cssText='position:fixed;inset:0;pointer-events:none;z-index:100000;overflow:hidden';
+    const emo=opts.levelUp?['⭐','🎉','🌟','✨']:['🎉','🌿','🦋','✨','🐝'];
+    const n=opts.levelUp?38:22;
+    for(let i=0;i<n;i++){const s=document.createElement('div');s.textContent=emo[i%emo.length];
+      s.style.cssText='position:absolute;top:-24px;left:'+(Math.random()*100)+'%;font-size:'+(14+Math.random()*18)+'px;animation:bgConf '+(1400+Math.random()*1200)+'ms ease-in '+(Math.random()*250)+'ms forwards';
+      wrap.appendChild(s);}
+    document.body.appendChild(wrap);setTimeout(()=>wrap.remove(),3300);
+  }catch(e){}
+  if(opts.levelUp)setTimeout(()=>toast('⭐ Level '+level()+' erreicht – jetzt „'+levelName(level())+'"!'),350);
+}
 function showResult(rec,c,info){
   _lastSp={de:c.de,sci:c.sci,key:rec.speciesKey};
   const badge=rec.status==='validated'?['Bestätigt','chip-em']:rec.status==='flagged'?['Vorläufig','chip-amb']:['Unvollständig','chip-blue'];
-  openModal(`<div class="row" style="gap:12px;margin-bottom:10px">${info.photo?`<img src="${info.photo}" style="width:56px;height:56px;border-radius:12px;object-fit:cover">`:`<span style="font-size:44px">${c.emoji}</span>`}
+  openModal(`<div style="text-align:center;font-weight:900;color:var(--em-deep);margin-bottom:8px">🎉 Super! Du hast eine Art gefunden.</div>
+    <div class="row" style="gap:12px;margin-bottom:10px">${info.photo?`<img src="${info.photo}" style="width:56px;height:56px;border-radius:12px;object-fit:cover">`:`<span style="font-size:44px">${c.emoji}</span>`}
     <div style="flex:1"><h3>${esc(c.de)}</h3><div class="mini muted" style="font-style:italic">${esc(c.sci)}</div></div><span class="chip ${badge[1]}">${badge[0]}</span></div>
-    ${info.summary?`<div class="mini" style="background:var(--s50);border-radius:12px;padding:10px;margin-bottom:10px">${esc(info.summary.slice(0,220))}…</div>`:(c.fact?`<div class="mini muted" style="margin-bottom:10px">${esc(c.fact)}</div>`:'')}
+    ${c.fact?`<div class="mini" style="background:var(--em-tint);border:1px solid var(--em-soft);border-radius:12px;padding:10px;margin-bottom:10px"><b>💡 Wusstest du?</b> ${esc(c.fact)}</div>`:''}
+    ${info.summary?`<div class="mini" style="background:var(--s50);border-radius:12px;padding:10px;margin-bottom:10px">${esc(info.summary.slice(0,220))}…</div>`:''}
     ${_uncertaintyBanner(rec,c)}
     ${_confBlock(c)}
     ${info.nearby!=null?`<div class="mini" style="margin-bottom:10px">🌍 <b>${info.nearby.toLocaleString('de-DE')}</b> Funde dieser Art in ~50 km (iNaturalist)</div>`:''}
@@ -1472,6 +1555,9 @@ function showResult(rec,c,info){
     <button class="btn btn-ghost" style="margin-bottom:8px" onclick="gemmaExplain()">🤖 Offline erklären (Gemma)</button>
     <button class="btn btn-primary" onclick="closeModal();go('home')">Fertig</button>
     <button class="btn btn-ghost" style="margin-top:8px" onclick="closeModal();go('scan')">Nächsten Fund scannen</button>`);
+  celebrate({levelUp:!!window._lvlUp});window._lvlUp=false;
+  /* Sanfter Hinweis auf die Umfrage nach dem 3. Fund (nur einmal). */
+  try{if(!S.surveyDone&&!localStorage.getItem('bioglow-survey')&&OBS.filter(o=>o.source==='scan').length===3){setTimeout(()=>toast('📋 Magst du uns kurz helfen? Profil → Hilfe → Umfrage'),1600);}}catch(e){}
 }
 
 /* ---------- Missionen ---------- */
@@ -1615,7 +1701,7 @@ const GRADES={'1':{label:'Kinder Klasse 1–2 (6–8 J.)',opts:3},'2':{label:'Ki
 const EASY_KEYS=['erinaceus_europaeus','coccinella_7','apis_mellifera','taraxacum','bufo_bufo','pica_pica','aglais_io'];
 function quizPool(){return (S.grade==='1'||S.grade==='2')?SPECIES.filter(s=>EASY_KEYS.includes(s.key)):SPECIES;}
 function gradeOpts(){return (GRADES[S.grade]||GRADES['3']).opts;}
-function setGrade(g){S.grade=g;saveSettings();render();toast('Altersstufe: '+GRADES[g].label);}
+function setGrade(g){S.grade=g;if(g==='1'||g==='2')S.easy=true;saveSettings();render();toast('Altersstufe: '+GRADES[g].label);}
 function gradeSelector(){return '<label class="fld">Altersstufe (passt Quiz & Inhalte an)</label><select onchange="setGrade(this.value)">'+Object.keys(GRADES).map(g=>'<option value="'+g+'" '+(S.grade===g?'selected':'')+'>'+GRADES[g].label+'</option>').join('')+'</select>';}
 
 /* ============================ UMWELTDATEN: Open-Meteo (ohne Schlüssel) ============================ */
@@ -2141,27 +2227,84 @@ async function computeSmartTip(){
 function currentTip(){return window._smartTip||tipOfDay();}
 
 /* ============================ HILFE, GEFÜHRTE TOUR & RECHTLICHES ============================ */
+/* Zwei Einführungen: KURZ (Standard, die 4-Schritt-Geschichte) und LANG (jeder Bereich).
+   Welche genutzt wird + eine kurze Bewertung am Ende werden gesammelt (Cloud), damit ihr
+   herausfindet, welche Länge Kinder bevorzugen. */
+const TOUR_SHORT=[
+  {t:'Willkommen! 🌿',x:'In BIOGLOW erforschst du die Natur vor deiner Tür – und hilfst ihr. So geht’s in vier Schritten:'},
+  {tab:'scan',t:'1) Scannen 📷',x:'Mach ein Foto von einer Pflanze oder einem Tier. Die KI schlägt Arten vor – DU bestätigst die richtige.'},
+  {tab:'home',t:'2) Bewerten 📊',x:'Jeder Fund verändert den Habitat-Score. Er zeigt, wie gesund dein Lebensraum ist: mehr verschiedene Arten = meist gesünder.'},
+  {tab:'missions',t:'3) Verbessern 🪵',x:'Erledige Missionen (z. B. eine Totholz-Ecke). Das hilft Tieren – und hebt deinen Habitat-Score.'},
+  {tab:'home',t:'4) Forschen 📈',x:'Miss später erneut und sieh im Trend, wie sich die Natur verbessert. Geprüfte Funde helfen echter Forschung (GBIF).'},
+  {t:'Los geht’s! 🎉',x:'Am besten fängst du mit einem Foto an. Die ausführliche Tour findest du jederzeit unter Profil → Hilfe.'}
+];
 const TOUR=[
-  {t:'Willkommen! 🌿',x:'BIOGLOW hilft dir, die Natur zu erforschen, ihre Gesundheit zu messen und zu schützen. Diese kurze Tour zeigt dir die wichtigsten Knöpfe. Du kannst sie jederzeit überspringen.'},
+  {t:'Willkommen! 🌿',x:'BIOGLOW hilft dir, die Natur zu erforschen, ihre Gesundheit zu messen und zu schützen. Diese Tour zeigt dir alle Bereiche. Du kannst sie jederzeit überspringen.'},
   {tab:'scan',t:'1. Scannen 📷',x:'Tippe unten auf „Scannen" und nimm ein Beweisfoto auf. Die KI schlägt Arten vor – DU bestätigst die richtige. Standort und Umweltdaten kommen automatisch dazu.'},
   {tab:'home',t:'2. Habitat-Score 📊',x:'Oben siehst du den Gesundheitswert deines Lebensraums. Er steigt mit jedem geprüften Fund. Darunter findest du Karte & Heatmap, Öko-Simulation, Monitoring und die Sensoren.'},
   {tab:'missions',t:'3. Missionen 🎯',x:'Erledige Pflege-Aktionen (z. B. Müll sammeln) mit Beweisfoto. Du kannst auch eigene Aktionen mit deiner Gruppe oder dem BUND anlegen.'},
   {tab:'learn',t:'4. Lernen 🧠',x:'Tägliche Challenge, Quiz und Wissens-Hub – hier wird MINT spielerisch. Die Altersstufe stellst du selbst ein.'},
   {tab:'profile',t:'5. Profil & Einstellungen ⚙️',x:'Sprache (DE/EN), Name, dunkles Design, KI-Quelle, Cloud für die Klasse, Export und der Hilfe-Knopf – alles hier.'},
-  {t:'Fertig! 🎉',x:'Unten wechselst du zwischen den Bereichen. Viel Spaß beim Forschen! Die Tour findest du jederzeit unter Profil → „Hilfe & Tour".'}
+  {t:'Fertig! 🎉',x:'Unten wechselst du zwischen den Bereichen. Viel Spaß beim Forschen! Die Tour findest du jederzeit unter Profil → „Hilfe".'}
 ];
-function startTour(i){
-  i=i||0;const s=TOUR[i];if(s.tab)go(s.tab);
-  const last=i>=TOUR.length-1,first=i<=0;
-  openModal('<div style="text-align:center"><div class="mini muted" style="font-weight:800">Tour · '+(i+1)+'/'+TOUR.length+'</div><h2 style="margin:6px 0">'+esc(s.t)+'</h2></div>'
+let _tourVariant='short';
+function startTour(i,variant){
+  i=i||0;if(variant)_tourVariant=variant;
+  const list=(_tourVariant==='long')?TOUR:TOUR_SHORT;
+  const s=list[i];if(s.tab)go(s.tab);
+  const last=i>=list.length-1,first=i<=0;
+  const label=(_tourVariant==='long')?'Ausführlich':'Schnellstart';
+  openModal('<div style="text-align:center"><div class="mini muted" style="font-weight:800">'+label+' · '+(i+1)+'/'+list.length+'</div><h2 style="margin:6px 0">'+esc(s.t)+'</h2></div>'
     +'<div style="background:var(--s50);border-radius:12px;padding:14px;font-size:14px;line-height:1.55">'+esc(s.x)+'</div>'
     +'<div class="row" style="gap:8px;margin-top:14px">'+(first?'':'<button class="btn btn-ghost" style="flex:1" onclick="startTour('+(i-1)+')">‹ Zurück</button>')
-    +(last?'<button class="btn btn-primary" style="flex:1" onclick="closeModal()">Fertig 🎉</button>':'<button class="btn btn-primary" style="flex:1" onclick="startTour('+(i+1)+')">Weiter ›</button>')+'</div>'
-    +(last?'':'<button class="btn btn-ghost btn-sm" style="width:100%;margin-top:8px" onclick="closeModal()">Überspringen</button>'));
+    +(last?'<button class="btn btn-primary" style="flex:1" onclick="finishTour()">Fertig 🎉</button>':'<button class="btn btn-primary" style="flex:1" onclick="startTour('+(i+1)+')">Weiter ›</button>')+'</div>'
+    +(last?'':'<button class="btn btn-ghost btn-sm" style="width:100%;margin-top:8px" onclick="finishTour()">Überspringen</button>'));
+}
+function finishTour(){askOnboardRating(_tourVariant);}
+/* Kurze Rückfrage am Ende: War die Einführung zu lang / genau richtig / zu kurz? */
+function askOnboardRating(variant){
+  openModal('<div style="text-align:center"><div class="q-emoji">🙂</div><h3>Wie war die Einführung?</h3>'
+    +'<div class="mini muted" style="margin:6px 0 12px">Deine Antwort hilft uns, sie für andere Kinder besser zu machen.</div></div>'
+    +'<div class="row" style="gap:8px">'
+    +'<button class="btn btn-ghost" style="flex:1" onclick="submitOnboardRating(\''+variant+'\',\'zu_kurz\')">Zu kurz</button>'
+    +'<button class="btn btn-primary" style="flex:1" onclick="submitOnboardRating(\''+variant+'\',\'genau_richtig\')">Genau richtig</button>'
+    +'<button class="btn btn-ghost" style="flex:1" onclick="submitOnboardRating(\''+variant+'\',\'zu_lang\')">Zu lang</button></div>'
+    +'<button class="btn btn-ghost btn-sm" style="width:100%;margin-top:10px" onclick="closeModal()">Überspringen</button>');
+}
+function submitOnboardRating(variant,rating){
+  S.onbVariant=variant;S.onbRating=rating;saveSettings();
+  logOnboarding(variant,rating);
+  closeModal();toast('Danke für dein Feedback! ❤️');
+}
+/* Onboarding-Nutzung sammeln – geht über dieselbe Pipeline wie „Feedback"
+   (Tabelle feedback, category='onboarding'), inkl. Offline-Warteschlange. */
+function logOnboarding(variant,rating){
+  const p={category:'onboarding',message:'variant='+variant+'; rating='+(rating||'-')+'; grade='+(S.grade||'?')+'; mode='+(S.mode||'?'),
+    area:'onboarding',lang:S.lang||'de',app_version:'RC1',name:S.name||null,created_at:new Date().toISOString()};
+  postOrQueueFeedback(p);
+}
+/* ── Baustein „Maskottchen & Mission 0": Igor der Igel führt spielerisch ein ── */
+const M0=[
+  {emoji:'🦔',t:'Igor braucht deine Hilfe',x:'„Hallo! Ich bin Igor der Igel. Mein Zuhause ist nicht mehr gesund – zu wenige Pflanzen und Tiere. Hilfst du mir, meinen Lebensraum wieder lebendig zu machen?"'},
+  {emoji:'🌼',t:'Schritt 1 – Entdecken',x:'„Geh nach draußen und fotografiere eine Pflanze oder ein Tier. Die KI verrät dir sofort, wer das ist!"',cta:{label:'📷 Jetzt scannen',fn:"closeModal();go('scan')"}},
+  {emoji:'🌿',t:'Schritt 2 – Verstehen',x:'„Jeder Fund zeigt, wie gesund mein Zuhause ist – die Natur-Gesundheit. Je mehr verschiedene Arten, desto besser!"'},
+  {emoji:'🪵',t:'Schritt 3 – Helfen',x:'„Erledige eine Mission, zum Beispiel eine Totholz-Ecke. Käfer, Pilze und ich freuen uns – und die Natur-Gesundheit steigt!"',cta:{label:'🎯 Missionen ansehen',fn:"closeModal();go('missions')"}},
+  {emoji:'🎉',t:'Du bist ein:e Naturheld:in!',x:'„Danke! Miss später erneut und sieh, wie sich mein Zuhause verbessert. Los geht’s – die Natur wartet auf dich!"'}
+];
+function startMission0(){_tourVariant='story';m0(0);}
+function m0(i){i=i||0;const s=M0[i];const last=i>=M0.length-1,first=i<=0;
+  openModal('<div style="text-align:center"><div class="q-emoji">'+s.emoji+'</div><h2 style="margin:6px 0">'+esc(s.t)+'</h2></div>'
+    +'<div style="background:var(--em-tint);border:1px solid var(--em-soft);border-radius:14px;padding:14px;font-size:14px;line-height:1.6">'+esc(s.x)+'</div>'
+    +(s.cta?'<button class="btn btn-primary" style="margin-top:12px" onclick="'+s.cta.fn+'">'+s.cta.label+'</button>':'')
+    +'<div class="row" style="gap:8px;margin-top:10px">'+(first?'':'<button class="btn btn-ghost" style="flex:1" onclick="m0('+(i-1)+')">‹ Zurück</button>')
+    +(last?'<button class="btn btn-primary" style="flex:1" onclick="finishTour()">Fertig 🎉</button>':'<button class="btn btn-ghost" style="flex:1" onclick="m0('+(i+1)+')">Weiter ›</button>')+'</div>'
+    +(last?'':'<button class="btn btn-ghost btn-sm" style="width:100%;margin-top:8px" onclick="finishTour()">Überspringen</button>'));
 }
 function openHelp(){
   openModal('<h3>❓ Hilfe & Erste Schritte</h3><div class="mini muted" style="margin:4px 0 10px">Neu hier? Starte die geführte Tour – oder schau in die FAQ.</div>'
-    +sBtn('🧭','Geführte Tour','Schritt für Schritt durch die App','startTour(0)')
+    +sBtn('🚀','Schnellstart-Tour','Die App in wenigen Schritten','startTour(0,\'short\')')
+    +sBtn('🧭','Ausführliche Tour','Jeder Bereich Schritt für Schritt','startTour(0,\'long\')')
+    +sBtn('🦔','Mit Igor dem Igel','Kleine Geschichte zum Mitmachen','startMission0()')
     +sBtn('❔','FAQ – Häufige Fragen','Antworten auf die häufigsten Fragen','openFaq()')
     +sBtn('🛡️','Echtheits-Prüfung (Anti-Cheat)','Wie BIOGLOW Schummeln verhindert','openAntiCheat()')
     +sBtn('⚖️','Impressum & Datenschutz','Rechtliches & wer verantwortlich ist','openLegal()')
@@ -2685,6 +2828,12 @@ async function postFeedback(p){
     body:JSON.stringify(p)});return r.ok;}catch(e){return false;}
 }
 function queueFeedback(p){try{const q=JSON.parse(localStorage.getItem('bioglow_feedback_queue')||'[]');q.push(p);localStorage.setItem('bioglow_feedback_queue',JSON.stringify(q));}catch(e){}}
+/* Sendet sofort oder legt in die Warteschlange (für Feedback UND Onboarding-Statistik). */
+async function postOrQueueFeedback(p){
+  if(!online()){queueFeedback(p);return;}
+  const ok=await postFeedback(p);
+  if(!ok)queueFeedback(p);
+}
 async function flushFeedbackQueue(){
   if(!online())return;let q=[];try{q=JSON.parse(localStorage.getItem('bioglow_feedback_queue')||'[]');}catch(e){}
   if(!q.length)return;const left=[];
@@ -2696,6 +2845,38 @@ function feedbackMailto(p){
   const body=p.message+'\n\n--- Info ---\nKategorie: '+p.category+'\nBereich: '+(p.area||'?')+'\nSprache: '+p.lang+'\nVersion: '+p.app_version;
   try{location.href='mailto:'+FEEDBACK_MAIL+'?subject='+encodeURIComponent(subj)+'&body='+encodeURIComponent(body);toast('📧 Kein Cloud-Versand – Mail-App wird geöffnet …');}catch(e){}
 }
+/* ============================ KURZE UMFRAGE (Forschungsdaten) ============================
+   6 gezielte Fragen → Tabelle „survey" in der zentralen Cloud (Offline-Warteschlange).
+   Liefert echte Zahlen für die FLL-Forschungsdokumentation. */
+function svQ(id,label,opts){return '<label class="fld">'+label+'</label><select id="'+id+'"><option value="">– bitte wählen –</option>'+opts.map(function(o){return '<option>'+o+'</option>';}).join('')+'</select>';}
+function openSurvey(){
+  openModal('<h3>📋 Kurze Umfrage (30 Sekunden)</h3><div class="mini muted" style="margin:4px 0 10px">Deine Antworten helfen uns – und unserer Forschung. Anonym &amp; freiwillig.</div>'
+    +svQ('svUsed','1. Hast du vorher schon eine Natur-App benutzt?',['Ja','Nein'])
+    +svQ('svActed','2. Hast du früher nach dem Erkennen etwas für die Natur getan?',['Ja','Nein'])
+    +svQ('svMot','3. Motiviert dich BIOGLOW, etwas für die Natur zu tun?',['Ja','Ein bisschen','Nein'])
+    +svQ('svFun','4. Was macht dir am meisten Spaß?',['Fotografieren','Sammeln & Level','Wettbewerb','Der Natur helfen','Quiz'])
+    +svQ('svUnd','5. Verstehst du die „Natur-Gesundheit"?',['Ja','Teilweise','Nein'])
+    +svQ('svRec','6. Würdest du BIOGLOW weiterempfehlen?',['Ja','Vielleicht','Nein'])
+    +'<label class="fld">Was wünschst du dir noch? (optional)</label><textarea id="svWish" rows="2" placeholder="Deine Idee …"></textarea>'
+    +'<button class="btn btn-primary" style="margin-top:10px" onclick="submitSurvey()">📨 Absenden</button>'
+    +'<button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="closeSurveyNoShow()">Nicht mehr zeigen</button>'
+    +'<button class="btn btn-ghost btn-sm" style="margin-top:6px" onclick="closeModal()">Später</button>');
+}
+function submitSurvey(){
+  const g=function(id){const e=$(id);return e?e.value:'';};
+  const p={used_app:g('svUsed'),acted_before:g('svActed'),motivates:g('svMot'),fun_most:g('svFun'),
+    understands:g('svUnd'),recommend:g('svRec'),wish:(g('svWish')||'').trim(),
+    lang:S.lang||'de',name:S.name||null,created_at:new Date().toISOString()};
+  S.surveyDone=true;saveSettings();try{localStorage.setItem('bioglow-survey','1');}catch(e){}
+  postOrQueueSurvey(p);closeModal();toast('Danke für deine Antworten! ❤️');
+}
+function closeSurveyNoShow(){S.surveyDone=true;try{localStorage.setItem('bioglow-survey','1');}catch(e){}saveSettings();closeModal();}
+async function postSurvey(p){const c=supaCfg();if(!c.url||!c.key)return false;
+  try{const r=await fetch(c.url.replace(/\/$/,'')+'/rest/v1/survey',{method:'POST',headers:{apikey:c.key,Authorization:'Bearer '+c.key,'Content-Type':'application/json',Prefer:'return=minimal'},body:JSON.stringify(p)});return r.ok;}catch(e){return false;}}
+function queueSurvey(p){try{const q=JSON.parse(localStorage.getItem('bioglow_survey_queue')||'[]');q.push(p);localStorage.setItem('bioglow_survey_queue',JSON.stringify(q));}catch(e){}}
+async function postOrQueueSurvey(p){if(!online()){queueSurvey(p);return;}const ok=await postSurvey(p);if(!ok)queueSurvey(p);}
+async function flushSurveyQueue(){if(!online())return;let q=[];try{q=JSON.parse(localStorage.getItem('bioglow_survey_queue')||'[]');}catch(e){}
+  if(!q.length)return;const left=[];for(const p of q){const ok=await postSurvey(p);if(!ok)left.push(p);}try{localStorage.setItem('bioglow_survey_queue',JSON.stringify(left));}catch(e){}}
 /* ============================ DATEN-TRANSPARENZ ============================ */
 function openDataInfo(){
   openModal('<h3>🔒 Was passiert mit deinen Daten?</h3><div class="mini" style="line-height:1.75">'
@@ -2757,22 +2938,36 @@ function openMonitorSpot(id){
 if('serviceWorker' in navigator && location.protocol.startsWith('http')){
   window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
 }
-window.addEventListener('online',()=>{updateNet();render();syncPending();flushFeedbackQueue();});
+window.addEventListener('online',()=>{updateNet();render();syncPending();flushFeedbackQueue();flushSurveyQueue();});
 window.addEventListener('offline',()=>{updateNet();render();});
 /* BioBlitz-Countdown: alle 20 s neu rendern, wenn aktiv und auf Missionen-Tab. */
 setInterval(()=>{if(S.blitz&&TAB==='missions'&&$('modal').classList.contains('hide'))render();},20000);
 /* Erst-Start-Onboarding (GeoQuest-Idee „Wer spielt?"): Altersstufe + Modus setzen. */
 function maybeOnboard(){
   try{if(localStorage.getItem('bioglow-onboarded'))return;}catch(e){return;}
-  openModal('<div style="text-align:center"><div class="q-emoji">🌿</div><h2>Willkommen bei BIOGLOW</h2><div class="mini muted" style="margin:6px 0 14px">Wer erforscht heute die Natur? Das passt Quiz &amp; Inhalte an.</div></div>'
+  openModal('<div style="text-align:center"><div class="q-emoji">🌿</div><h2>Willkommen bei BIOGLOW</h2><div class="mini muted" style="margin:6px 0 14px">Entdecke, was rund um dich lebt – und hilf der Natur.</div></div>'
     +'<label class="fld">Wer bist du? (passt Quiz &amp; Inhalte an)</label><select id="obGrade">'+Object.keys(GRADES).map(g=>'<option value="'+g+'" '+(g===(S.grade||'3')?'selected':'')+'>'+GRADES[g].label+'</option>').join('')+'</select>'
-    +'<label class="fld">Wie nutzt du BIOGLOW?</label><div class="row" style="gap:8px;margin-top:4px"><button class="btn btn-ghost" style="flex:1" onclick="finishOnboard(\'explorer\')">🧭 Entdecken</button><button class="btn btn-primary" style="flex:1" onclick="finishOnboard(\'school\')">🎓 Bildung</button></div>');
+    +'<label class="fld">Wie nutzt du BIOGLOW?</label><div class="row" style="gap:8px;margin-top:4px"><button class="btn btn-ghost" style="flex:1" onclick="finishOnboard(\'explorer\')">🧭 Entdecken</button><button class="btn btn-primary" style="flex:1" onclick="finishOnboard(\'school\')">🎓 Bildung</button></div>'
+    +'<label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13px;color:var(--s500);cursor:pointer"><input type="checkbox" id="obHide" checked style="width:18px;height:18px"> Diese Einführung nicht mehr automatisch zeigen</label>');
 }
 function finishOnboard(mode){
-  const sel=$('obGrade');if(sel)S.grade=sel.value;S.mode=mode;saveSettings();
-  try{localStorage.setItem('bioglow-onboarded','1');}catch(e){}
-  updateModeBtn();closeModal();render();startTour(0);
+  const sel=$('obGrade');if(sel)S.grade=sel.value;S.mode=mode;
+  if(S.grade==='1'||S.grade==='2')S.easy=true;
+  const hide=$('obHide')?$('obHide').checked:true;
+  S.onbHide=hide;saveSettings();
+  if(hide){try{localStorage.setItem('bioglow-onboarded','1');}catch(e){}}
+  updateModeBtn();closeModal();render();chooseOnboarding();
 }
+/* Auswahl: kurze (Standard) oder ausführliche Einführung – oder überspringen. */
+function chooseOnboarding(){
+  openModal('<div style="text-align:center"><div class="q-emoji">🧭</div><h2>Wie möchtest du starten?</h2>'
+    +'<div class="mini muted" style="margin:6px 0 14px">Du kannst es später jederzeit ändern (Profil → Hilfe).</div></div>'
+    +'<button class="q-opt" onclick="startTour(0,\'short\')"><span style="font-size:22px">🚀</span><span style="flex:1"><b>Schnellstart (empfohlen)</b><div class="mini muted">Die App in wenigen Schritten – ca. 1 Minute.</div></span></button>'
+    +'<button class="q-opt" onclick="startTour(0,\'long\')"><span style="font-size:22px">🧭</span><span style="flex:1"><b>Ausführliche Entdeckung</b><div class="mini muted">Jeder Bereich Schritt für Schritt erklärt.</div></span></button>'
+    +'<button class="q-opt" onclick="startMission0()"><span style="font-size:22px">🦔</span><span style="flex:1"><b>Mit Igor dem Igel</b><div class="mini muted">Eine kleine Geschichte – ideal für jüngere Kinder.</div></span></button>'
+    +'<button class="btn btn-ghost btn-sm" style="width:100%;margin-top:6px" onclick="skipOnboarding()">Überspringen</button>');
+}
+function skipOnboarding(){S.onbVariant='skip';saveSettings();logOnboarding('skip',null);closeModal();}
 
 (async function init(){
   try{OBS=await IDB.all();}catch(e){OBS=[];}
@@ -2782,8 +2977,8 @@ function finishOnboard(mode){
   if(typeof computeSmartTip==='function'){computeSmartTip().then(()=>{if(TAB==='home')render();}).catch(()=>{});}
   /* Katalog-Fotos im Hintergrund vorladen (verzögert, damit der Start flüssig bleibt). */
   setTimeout(()=>{try{prewarmPhotos();}catch(e){}},2500);
-  /* Offline gespeichertes Feedback nachsenden, falls online. */
-  setTimeout(()=>{try{flushFeedbackQueue();}catch(e){}},3500);
+  /* Offline gespeichertes Feedback/Umfragen nachsenden, falls online. */
+  setTimeout(()=>{try{flushFeedbackQueue();flushSurveyQueue();}catch(e){}},3500);
 })();
 </script>
 </body>
