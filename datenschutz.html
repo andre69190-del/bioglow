@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Datenschutzerklärung – BIOGLOW</title>
+<style>
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;color:#334155;line-height:1.7;max-width:720px;margin:0 auto;padding:32px 20px;background:#f8fafc}
+  h1{color:#047857}h2{color:#047857;margin-top:26px;font-size:18px}
+  a{color:#047857;font-weight:600}
+  .note{background:#ecfdf5;border:1px solid #d1fae5;border-radius:12px;padding:14px;font-size:14px}
+  ul{padding-left:20px}
+</style>
+</head>
+<body>
+  <p><a href="index.html">‹ Zurück</a></p>
+  <h1>Datenschutzerklärung</h1>
+  <p class="note">Stand: Juli 2026. BIOGLOW ist datensparsam gebaut: alles bleibt <b>zuerst nur auf deinem Gerät</b>.
+  Kein Ersatz für eine Rechtsberatung.</p>
+
+  <h2>Verantwortliche Stelle (Art. 13 DSGVO)</h2>
+  <p>Andre Arndt · Bürgermeister-Willinger-Str. 77 · 69190 Walldorf · Deutschland<br>
+  E-Mail: <a href="mailto:farndt691@gmail.com">farndt691@gmail.com</a><br>
+  Betreiber der zentralen Cloud (Supabase, selbst gehostet auf arndt-software.de).</p>
+
+  <h2>Welche Daten verarbeitet BIOGLOW?</h2>
+  <ul>
+    <li><b>Lokal auf dem Gerät (Standard):</b> Fotos, Tonaufnahmen, Fundorte, Notizen und Einstellungen
+      bleiben im Browser-Speicher des Geräts. Ohne Cloud verlassen sie das Gerät nicht.</li>
+    <li><b>Live-Abfragen bei der Bestimmung:</b> Es wird nur der <b>Standort der Abfrage</b> übermittelt
+      (kein Name, kein Konto) an offene Dienste: iNaturalist, GBIF, Open-Meteo, OpenStreetMap/Overpass,
+      Wikipedia (Artfotos/Infos); optional Pl@ntNet/Kindwise/BirdNET nur mit eigenem Schlüssel.</li>
+    <li><b>On-Device-KI (optional):</b> Bei Wahl der „On-Device-KI" lädt der Browser einmalig ein
+      Erkennungsmodell (TensorFlow.js/MobileNet) aus einem CDN; die Erkennung läuft danach lokal –
+      Fotos werden dabei nicht hochgeladen.</li>
+    <li><b>Zentrale Cloud (Supabase, selbst gehostet):</b> Sobald ein <b>Gruppencode</b> genutzt oder ein
+      Fund/eine Aktion geteilt wird, werden gespeichert: Artname, Zeitpunkt, Status, Punkte, frei
+      gewählter <b>Anzeigename</b>, Gruppencode und ein <b>grob gerundeter</b> Standort (bei gefährdeten
+      Arten zusätzlich unscharf). <b>Fotos werden nicht hochgeladen.</b></li>
+    <li><b>Feedback &amp; Umfrage (freiwillig):</b> Beim Absenden von „Fehler/Feedback melden" oder der
+      „Kurzen Umfrage" werden die Angaben (Text bzw. Antworten, Anzeigename, Sprache, Zeitpunkt) in der
+      zentralen Cloud gespeichert und können per E-Mail an den Betreiber (farndt691@gmail.com) gemeldet
+      werden.</li>
+    <li><b>Kamera / Mikrofon / Standort:</b> nur nach ausdrücklicher Freigabe und nur für die jeweilige Funktion.</li>
+  </ul>
+
+  <h2>Zweck &amp; Rechtsgrundlage</h2>
+  <p>Verarbeitung zur Bereitstellung der App-Funktionen und – bei Gruppen/Cloud – zur gemeinsamen Nutzung
+  in Klasse/Team. Rechtsgrundlage: berechtigtes Interesse (Art. 6 Abs. 1 f DSGVO) bzw. Einwilligung
+  (Art. 6 Abs. 1 a DSGVO). Zweck ist Umweltbildung und Citizen Science – <b>keine Werbung</b>.</p>
+
+  <h2>Kinder (Art. 8 DSGVO)</h2>
+  <p>BIOGLOW richtet sich auch an Kinder. Es werden <b>keine Klarnamen</b> verlangt (frei wählbarer
+  Anzeigename) und keine Konten angelegt. Für die Nutzung durch Kinder bzw. in Klassen ist die
+  <b>Einwilligung der Erziehungsberechtigten</b> einzuholen.</p>
+
+  <h2>Speicherdauer</h2>
+  <p>Lokale Daten bleiben bis zur Löschung durch die Nutzer:in (jederzeit in der App möglich).
+  Cloud-Daten (Funde/Feedback/Umfrage) werden nur so lange gespeichert, wie es für den Zweck nötig ist,
+  und auf Wunsch gelöscht.</p>
+
+  <h2>Was BIOGLOW nicht tut</h2>
+  <p>Kein Werbe-Tracking, keine Analyse-Cookies, keine Weitergabe an Werbenetzwerke. Teilen passiert nur
+  aktiv (Export-Datei oder Gruppencode).</p>
+
+  <h2>Schutz sensibler Daten</h2>
+  <p>Standorte gefährdeter Arten werden überall unscharf gemacht. Der Zugriff auf die Cloud-Daten ist
+  durch Zugriffsregeln (Row Level Security) beschränkt.</p>
+
+  <h2>Rechte der Betroffenen</h2>
+  <p>Auskunft, Berichtigung, Löschung, Einschränkung, Datenübertragbarkeit und Widerspruch (Art. 15–21
+  DSGVO) sowie Beschwerde bei einer Aufsichtsbehörde. Kontakt: farndt691@gmail.com. Lokale Daten sind
+  jederzeit über „Alle lokalen Daten löschen" in der App entfernbar.</p>
+
+  <p style="margin-top:24px">Siehe auch <a href="impressum.html">Impressum</a>.</p>
+</body>
+</html>

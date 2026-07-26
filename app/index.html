@@ -2345,8 +2345,9 @@ function openAntiCheat(){
 }
 function openLegal(){
   openModal('<h3>⚖️ Impressum &amp; Datenschutz</h3><div class="mini" style="line-height:1.7">'
-    +'<b>Impressum (§ 5 DDG)</b><br>Verantwortlich: <b>[Name der erwachsenen Person / Schule]</b><br>Anschrift: [Straße, PLZ Ort]<br>Kontakt: [E-Mail]<br><small>Muss von einer erwachsenen Person ausgefüllt werden – Kinder können nicht allein verantwortlich sein.</small><br><br>'
-    +'<b>Datenschutz (DSGVO)</b><br>BIOGLOW speichert Fotos und Funde <b>zuerst nur lokal</b> auf deinem Gerät. Live-Abfragen (iNaturalist, GBIF, Open-Meteo, OpenStreetMap) übermitteln nur den <b>Standort der Abfrage</b> – keinen Namen, kein Konto. Eine Cloud (Supabase) wird nur genutzt, wenn ihr sie selbst einrichtet; dann seid ihr die verantwortliche Stelle. Standorte gefährdeter Arten werden unscharf gemacht. <b>Kein Werbe-Tracking.</b><br><br>Vollständige Fassung: Datei <b>IMPRESSUM_und_Datenschutz.md</b>.'
+    +'<b>Impressum (§ 5 DDG)</b><br>Verantwortlich: <b>Andre Arndt</b>, Bürgermeister-Willinger-Str. 77, 69190 Walldorf.<br>Kontakt: farndt691@gmail.com<br><small>Privates, nicht-kommerzielles Schülerprojekt · Team Maßbots · FLL 2026/27.</small><br><br>'
+    +'<b>Datenschutz (DSGVO)</b><br>BIOGLOW speichert Fotos und Funde <b>zuerst nur lokal</b> auf deinem Gerät. Live-Abfragen (iNaturalist, GBIF, Open-Meteo, OpenStreetMap, Wikipedia) übermitteln nur den <b>Standort der Abfrage</b> – keinen Namen, kein Konto. Bei Nutzung eines <b>Gruppencodes</b> werden Fund-Daten (Art, Zeit, grober Standort, Anzeigename, Gruppencode) in unserer <b>zentralen Cloud</b> (selbst gehostet) gespeichert – <b>Fotos nie</b>. Feedback/Umfrage sind freiwillig. Standorte gefährdeter Arten werden unscharf gemacht. <b>Kein Werbe-Tracking.</b> Für Kinder: Einwilligung der Eltern.<br><br>'
+    +'Vollständig: <a href="/impressum.html" target="_blank" rel="noopener">Impressum</a> · <a href="/datenschutz.html" target="_blank" rel="noopener">Datenschutz</a>.'
     +'</div><button class="btn btn-primary" style="margin-top:12px" onclick="closeModal()">Schließen</button>');
 }
 
@@ -2807,8 +2808,16 @@ function openFeedback(){
     +'<label class="fld">Beschreibung</label>'
     +'<textarea id="fbTxt" rows="4" placeholder="Kurz beschreiben (mind. 10 Zeichen) …"></textarea>'
     +'<button class="btn btn-primary" style="margin-top:10px" onclick="sendFeedback()">📨 Senden</button>'
-    +'<button class="btn btn-ghost" style="margin-top:8px" onclick="closeModal()">Abbrechen</button>');
+    +'<button class="btn btn-ghost" style="margin-top:8px" onclick="feedbackViaMail()">📧 Stattdessen per E-Mail ans Team</button>'
+    +'<button class="btn btn-ghost btn-sm" style="margin-top:6px" onclick="closeModal()">Abbrechen</button>');
   setTimeout(()=>{if($('fbTxt'))$('fbTxt').focus();},60);
+}
+/* Immer verfügbarer E-Mail-Weg: Feedback direkt an das Team (farndt691@gmail.com). */
+function feedbackViaMail(){
+  const cat=$('fbCat')?$('fbCat').value:'sonstiges';
+  const txt=($('fbTxt')?$('fbTxt').value:'').trim();
+  const p={category:cat,message:txt||'(kein Text eingegeben)',area:(typeof TAB!=='undefined'?TAB:null),lang:S.lang||'de',app_version:'RC1'};
+  closeModal();feedbackMailto(p);
 }
 async function sendFeedback(){
   const cat=$('fbCat')?$('fbCat').value:'sonstiges';

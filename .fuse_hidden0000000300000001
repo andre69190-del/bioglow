@@ -114,7 +114,6 @@
     Teil von <a href="https://arndt-software.de">arndt-software.de</a> ·
     © <span id="y"></span> Andre Arndt ·
     Kontakt: <a href="mailto:kontakt@arndt-software.de">kontakt@arndt-software.de</a>
-    <br><a href="impressum.html">Impressum</a> · <a href="datenschutz.html">Datenschutz</a> · <a href="anleitung.html">Anleitung</a>
   </footer>
   <script>document.getElementById('y').textContent=new Date().getFullYear();</script>
 </body>
