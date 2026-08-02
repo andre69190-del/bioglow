@@ -251,7 +251,18 @@ const MISSIONS = [
   {id:2,title:'Teichufer säubern',emoji:'♻️',cat:'Schutz',diff:'Leicht',impact:2,xp:80,desc:'Sammle Müll rund ums Ufer – schützt Amphibien und Wasservögel.'},
   {id:3,title:'Wildbienen-Nisthilfe',emoji:'🏠',cat:'Lebensraum',diff:'Leicht',impact:3,xp:100,desc:'Stelle eine Nisthilfe aus Hartholz und Bambus auf.'},
   {id:4,title:'Blühstreifen kartieren',emoji:'🌼',cat:'Erhebung',diff:'Leicht',impact:2,xp:70,desc:'Erfasse blühende Flächen für die Bestäuber-Karte.'},
-  {id:5,title:'Wasserqualität messen',emoji:'💧',cat:'MINT',diff:'Schwer',impact:4,xp:180,desc:'Bestimme pH-Wert und Trübung des Teichs mit dem Test-Kit.'}
+  {id:5,title:'Wasserqualität messen',emoji:'💧',cat:'MINT',diff:'Schwer',impact:4,xp:180,desc:'Bestimme pH-Wert und Trübung des Teichs mit dem Test-Kit.'},
+  {id:6,title:'Heimische Wildblumen säen',emoji:'🌱',cat:'Lebensraum',diff:'Leicht',impact:4,xp:120,desc:'Säe heimische Wildblumen – Nahrung für Bienen und Schmetterlinge.'},
+  {id:7,title:'Laubhaufen für den Igel',emoji:'🦔',cat:'Lebensraum',diff:'Leicht',impact:3,xp:90,desc:'Schichte Laub und Äste in eine ruhige Ecke – ein Winterquartier für den Igel.'},
+  {id:8,title:'Nistkasten aufhängen',emoji:'🐦',cat:'Lebensraum',diff:'Mittel',impact:4,xp:130,desc:'Häng einen Nistkasten auf – Wohnraum für Meisen & Co.'},
+  {id:9,title:'Müll am Flussufer sammeln',emoji:'🧺',cat:'Schutz',diff:'Leicht',impact:3,xp:100,desc:'Sammle Müll am Ufer. Danach die Menge eintragen – für die Müll-Rangliste!'},
+  {id:10,title:'Steinhaufen für Eidechsen',emoji:'🦎',cat:'Lebensraum',diff:'Mittel',impact:4,xp:130,desc:'Ein sonniger Steinhaufen ist Sonnenplatz und Versteck für Reptilien.'},
+  {id:11,title:'Wasserstelle anlegen',emoji:'🪣',cat:'Lebensraum',diff:'Leicht',impact:3,xp:100,desc:'Eine flache Wasserschale mit Steinen – Tränke für Vögel und Insekten.'},
+  {id:12,title:'Komposthaufen starten',emoji:'🍂',cat:'Lebensraum',diff:'Leicht',impact:3,xp:90,desc:'Kompost gibt Nährstoffe zurück und ist Lebensraum für viele Kleintiere.'},
+  {id:13,title:'Heimischen Strauch pflanzen',emoji:'🌳',cat:'Lebensraum',diff:'Mittel',impact:5,xp:150,desc:'Pflanze einen heimischen Strauch (z. B. Holunder) – Nahrung und Schutz für Vögel.'},
+  {id:14,title:'Invasive Pflanze melden',emoji:'⚠️',cat:'Erhebung',diff:'Leicht',impact:2,xp:80,desc:'Entdecke und melde eine invasive Art (z. B. Springkraut) – wichtig fürs Monitoring.'},
+  {id:15,title:'Sandarium für Wildbienen',emoji:'🏖️',cat:'Lebensraum',diff:'Mittel',impact:4,xp:130,desc:'Eine offene Sandfläche – Nistplatz für viele bodenbrütende Wildbienen.'},
+  {id:16,title:'Bestäuber 10 Minuten zählen',emoji:'🐝',cat:'Erhebung',diff:'Leicht',impact:2,xp:80,desc:'Zähle 10 Minuten lang, wie viele Insekten eine Blüte besuchen – echte Forschung.'}
 ];
 
 const WORKSHEETS = [
@@ -286,7 +297,7 @@ const IDB = (()=>{
 /* ---------- Einstellungen (localStorage) ---------- */
 const LS='bioglow-settings';
 function loadSettings(){try{return Object.assign(defSettings(),JSON.parse(localStorage.getItem(LS)||'{}'));}catch(e){return defSettings();}}
-function defSettings(){return {mode:'explorer',provider:'demo',keys:{plantnet:'',kindwise:'',birdnet:''},streak:0,lastDaily:'',dailyBest:0,grade:'3',supabase:{url:'',key:''},classCode:'',theme:'none',blitz:null,customMissions:[],stations:[],wrongPool:[],name:'Forscher:in',dark:false,bigText:false,cb:false,easy:false,useGps:true,fuzzAll:false,publicDefault:false,pin:'',blitzMin:15,lang:'de',aiAsked:false,gemmaUrl:'',period:30,devMode:false,onbVariant:'',onbRating:'',onbHide:true,surveyDone:false};}
+function defSettings(){return {mode:'explorer',provider:'auto',keys:{plantnet:'',kindwise:'',birdnet:''},streak:0,lastDaily:'',dailyBest:0,grade:'3',supabase:{url:'',key:''},classCode:'',theme:'none',blitz:null,customMissions:[],stations:[],wrongPool:[],name:'Forscher:in',dark:false,bigText:false,cb:false,easy:false,useGps:true,fuzzAll:false,publicDefault:false,pin:'',blitzMin:15,lang:'de',aiAsked:false,gemmaUrl:'',period:30,devMode:false,onbVariant:'',onbRating:'',onbHide:true,surveyDone:false};}
 let S = loadSettings();
 function saveSettings(){try{localStorage.setItem(LS,JSON.stringify(S));}catch(e){}}
 
@@ -625,6 +636,7 @@ function exifChecks(o){
 
 /* ============================ KI-PROVIDER (Dropdown) ============================ */
 const PROVIDERS={
+  auto:{label:'🤖 Automatisch (empfohlen) – App wählt selbst',needsKey:false,online:false},
   demo:{label:'Demo / Offline (ohne Schlüssel)',needsKey:false,online:false},
   ondevice:{label:'On-Device KI – Foto offline (TensorFlow.js)',needsKey:false,online:false},
   inat:{label:'iNaturalist – echte Artensuche (ohne Schlüssel)',needsKey:false,online:true},
@@ -729,7 +741,7 @@ function germanIconic(n){return {Aves:'Vogel',Insecta:'Insekt',Amphibia:'Amphibi
 
 /* Pl@ntNet Bildbestimmung (braucht Schlüssel; Best-Effort, CORS abhängig) */
 async function plantnetIdentify(dataUrl){
-  const key=S.keys.plantnet;if(!key)throw new Error('Kein Pl@ntNet-Schlüssel');
+  const key=plantnetKey();if(!key)throw new Error('Kein Pl@ntNet-Schlüssel');
   const blob=await (await fetch(dataUrl)).blob();
   const fd=new FormData();fd.append('images',blob,'photo.jpg');fd.append('organs','auto');
   const r=await fetch('https://my-api.plantnet.org/v2/identify/all?api-key='+encodeURIComponent(key),{method:'POST',body:fd});
@@ -838,6 +850,7 @@ async function ondeviceIdentify(dataUrl){
 /* ===== KI-Infrastruktur 1.0 (additiv – wickelt bestehende Provider ein) ===== */
 function _now(){return (typeof performance!=='undefined'&&performance.now)?performance.now():Date.now();}
 const AI_REGISTRY=[
+ {id:'auto',kind:'image',name:'Auto',version:'1.0',offline:true,experimental:false,capabilities:['species-identification','plant-identification'],handler:'autoIdentify'},
  {id:'demo',kind:'image',name:'Demo (Katalog)',version:'1.0',offline:true,experimental:false,capabilities:['species-identification'],handler:'demoIdentifyLocal'},
  {id:'ondevice',kind:'image',name:'MobileNet',version:'v2.1',offline:true,experimental:false,capabilities:['species-identification'],handler:'ondeviceIdentify'},
  {id:'inat',kind:'cloud',name:'iNaturalist',version:'v1',offline:false,experimental:false,capabilities:['species-identification','plant-identification'],handler:'inatSearch'},
@@ -869,7 +882,7 @@ function healthCheck(){
   add('TensorFlow.js',(typeof window!=='undefined'&&window.tf)?'ok':'warn','CDN, lädt bei Bedarf');
   add('Gemma (WebGPU)',(typeof gemmaSupported==='function'&&gemmaSupported())?(S.gemmaUrl?'ok':'warn'):'off',(typeof gemmaSupported==='function'&&gemmaSupported())?(S.gemmaUrl?'Modell hinterlegt':'keine Modell-URL'):'kein WebGPU');
   add('BirdNET-Endpoint',S.keys&&S.keys.birdnet?'ok':'off','optional');
-  add('Pl@ntNet-Schlüssel',S.keys&&S.keys.plantnet?'ok':'off','optional');
+  add('Pl@ntNet-Schlüssel',plantnetKey()?'ok':'off','optional');
   add('Internet',(typeof navigator!=='undefined'&&navigator.onLine)?'ok':'warn');
   add('Kamera',(typeof navigator!=='undefined'&&navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)?'ok':'off');
   add('Mikrofon',(typeof navigator!=='undefined'&&navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)?'ok':'off');
@@ -902,9 +915,33 @@ function openAiDebug(){
   openModal(html);
 }
 
+/* 🤖 AUTO-Modus: „Point & Shoot" – die App wählt selbst.
+   Trick: Pl@ntNets eigener Trefferwert ist das beste „ist das eine Pflanze?"-Signal.
+   Hoher Pl@ntNet-Wert → Pflanze (Pl@ntNet). Sonst → On-Device (Tier, grob). Offline → On-Device. */
+let _autoUsed='';
+async function autoIdentify(dataUrl){
+  const canPn=online()&&!!plantnetKey();
+  let pn=null;
+  if(canPn){try{pn=await plantnetIdentify(dataUrl);}catch(e){}}
+  const pnTop=(pn&&pn[0]&&typeof pn[0].conf==='number')?pn[0].conf:0;
+  if(pn&&pn.length&&pnTop>=0.15){_autoUsed='Auto → Pl@ntNet 🌿';return pn;}        // klar Pflanze → fertig (kein Modell-Download)
+  let od=null;try{od=await ondeviceIdentify(dataUrl);}catch(e){}                    // sonst On-Device (Tier/unsicher)
+  const odReject=od&&od[0]&&od[0].reject;
+  const odTop=(od&&!odReject&&od[0]&&typeof od[0].conf==='number')?od[0].conf:0;
+  if(od&&!odReject&&od.length&&odTop>=pnTop){_autoUsed='Auto → On-Device 📱';return od;}
+  if(pn&&pn.length){_autoUsed='Auto → Pl@ntNet 🌿';return pn;}                       // schwache Pflanze besser als nichts
+  if(od&&od.length)return od;                                                        // z. B. Ablehnung (Mensch/kein Lebewesen)
+  try{const d=await demoIdentifyLocal(dataUrl);if(d&&d.cands&&d.cands.length){_autoUsed='Auto (offline · Vorschläge)';return d.cands;}}catch(e){} // Offline-Rückfall
+  return [{reject:true,reason:'nonnature',de:'Kein Lebewesen sicher erkannt',hint:'Bitte näher heran, scharf stellen und erneut versuchen.'}];
+}
 async function identify(dataUrl,queryText){
   const p=S.provider;
   try{
+    if(p==='auto'){
+      if(!_mnet&&!(online()&&plantnetKey()))toast('KI wird vorbereitet (beim 1. Mal ~16 MB) …');
+      _autoUsed='Auto';const cands=await autoIdentify(dataUrl);
+      return {provider:_autoUsed||'Auto',cands:cands};
+    }
     if(p==='ondevice'){
       if(!_mnet)toast('On-Device KI wird geladen (beim 1. Mal ~16 MB) …');
       return {provider:'On-Device KI',cands:await withMetrics('ondevice',ondeviceIdentify)(dataUrl)};
@@ -1024,7 +1061,7 @@ function screenHome(){
     </div>
     <div class="sec-title"><h2>Karte & mehr</h2></div>
     <div class="card" onclick="openMap()" style="cursor:pointer;margin-bottom:10px"><div class="row" style="justify-content:space-between"><div class="row"><div style="font-size:28px">🗺️</div><div><b>Fundkarte & Heatmap</b><div class="mini muted">Alle Funde + Dichte-Heatmap (OpenStreetMap)</div></div></div><span class="chip chip-em">Öffnen ›</span></div></div>
-    <div class="card" onclick="openMonitor()" style="cursor:pointer;margin-bottom:10px"><div class="row" style="justify-content:space-between"><div class="row"><div style="font-size:28px">📈</div><div><b>Monitoring (Vorher/Nachher)</b><div class="mini muted">Dieselbe Stelle über Zeit fotografieren & vergleichen</div></div></div><span class="chip chip-em">Öffnen ›</span></div></div>
+    <div class="card" onclick="openMonitor()" style="cursor:pointer;margin-bottom:10px"><div class="row" style="justify-content:space-between"><div class="row"><div style="font-size:28px">📈</div><div><b>Monitoring – einen Ort verfolgen</b><div class="mini muted">Denselben Ort alle paar Tage/Wochen fotografieren – sieh Veränderung &amp; Wettereinfluss</div></div></div>${monitorDueCount()>0?`<span class="chip" style="background:#fef3c7;color:#b45309">📅 ${monitorDueCount()} fällig</span>`:'<span class="chip chip-em">Öffnen ›</span>'}</div></div>
     <div class="card" onclick="openSensors()" style="cursor:pointer;margin-bottom:10px"><div class="row" style="justify-content:space-between"><div class="row"><div style="font-size:28px">🔬</div><div><b>Sensoren (Handy + extern)</b><div class="mini muted">GPS · Lärm · Licht · Kompass · Bewegung · Bluetooth</div></div></div><span class="chip chip-em">Öffnen ›</span></div></div>
 
     <div class="banner em" style="margin-top:18px"><div class="ic">🌐</div><div><b>Teil der weltweiten Biodiversität</b><div class="mini" style="opacity:.85">Jeder geprüfte Fund ist ein echter Datenpunkt – exportierbar im Darwin-Core-Format.</div></div></div>
@@ -1069,7 +1106,7 @@ function screenScan(){
       <button class="btn btn-ghost" style="margin-top:10px" onclick="birdRecordFlow()">🎤 Vogelstimme aufnehmen</button>
       <div class="mini muted" style="margin-top:10px">📷 Tipp für scharfe Fotos: nah heran, ruhig halten, gutes Licht.</div>
     </div>
-    ${S.provider==='demo'?`<div class="banner" style="background:#92400e;color:#fff;margin-top:12px;cursor:pointer" onclick="openProviderPick()"><div class="ic">🤖</div><div class="mini"><b>Demo = Übungsmodus</b> (rät aus wenigen Arten, ohne echte Erkennung). Für <b>echte KI</b> hier tippen: iNaturalist (ohne Schlüssel) oder Pl@ntNet (Foto-KI).</div></div>`:''}
+    ${S.provider==='demo'?`<div class="banner" style="background:#92400e;color:#fff;margin-top:12px;cursor:pointer" onclick="openProviderPick()"><div class="ic">🤖</div><div class="mini"><b>Demo = Übungsmodus</b> – sieht das Foto <b>nicht</b> an, rät nur. Für echte Foto-Erkennung hier tippen: <b>Pl@ntNet</b> (beste Pflanzen-Erkennung) oder <b>On-Device KI</b> (offline, ohne Schlüssel).</div></div>`:''}
     <div class="banner" style="background:#0f766e;margin-top:14px"><div class="ic">💡</div><div class="mini" style="opacity:.95">Tipp: Foto scharf & nah. Standort wird automatisch erfasst und geprüft (Anti-Cheat).</div></div>
   </div>`;
 }
@@ -1092,6 +1129,7 @@ function screenMissions(){
       </div>`;}).join('')}
     <div class="banner" style="background:#166534;color:#fff;margin-top:6px;cursor:pointer" onclick="addCustomMission()"><div class="ic">🤝</div><div class="mini" style="opacity:.95"><b>Aktion erstellen & teilen</b> – Gewässersäuberung / Müllsammeln mit Gruppe, AG, Schule oder Verein.</div></div>
     <button class="btn btn-ghost" style="margin-top:10px" onclick="openSharedMissions()">🌍 Geteilte Aktionen (Gruppe / Umkreis)</button>
+    <button class="btn btn-ghost" style="margin-top:10px" onclick="openLitterBoard()">🏆 Müll-Rangliste (wer sammelt am meisten?)</button>
     ${(function(){const b=blitzInfo();
       if(b&&!b.over)return `<div class="card" style="background:linear-gradient(135deg,#b45309,#f59e0b);color:#fff;border:none;margin-top:6px"><div class="row" style="justify-content:space-between"><div><div class="mini" style="opacity:.85;font-weight:800">⚡ BIOBLITZ LÄUFT</div><h3 style="color:#fff">${b.species} Arten · noch ${b.minutes} Min</h3></div><button class="btn" style="background:#fff;color:#b45309;width:auto;padding:9px 14px" onclick="stopBioBlitz()">Beenden</button></div></div>`;
       if(b&&b.over)return `<div class="card" style="margin-top:6px;text-align:center"><div style="font-size:34px">🏁</div><b>BioBlitz vorbei!</b><div class="mini muted">${b.species} Arten in 15 Minuten gefunden</div><button class="btn btn-primary btn-sm" style="width:100%;margin-top:8px" onclick="stopBioBlitz()">Super!</button></div>`;
@@ -1370,7 +1408,7 @@ function photoCoach(){
     +'<button class="btn btn-ghost" style="margin-top:8px" onclick="closeModal();continueScan()">Trotzdem bestimmen</button>');
 }
 function continueScan(){
-  if(online() && S.provider==='demo' && !S.aiAsked){ return askAiThenScan(); }
+  if(online() && !S.aiAsked && S.provider!=='auto'){ return askAiThenScan(); }
   proceedIdentify();
 }
 async function proceedIdentify(){
@@ -1382,16 +1420,17 @@ async function proceedIdentify(){
 /* Beim ersten Online-Scan fragen: echte KI oder Demo? (Offline wird nie gefragt → Demo.) */
 function askAiThenScan(){
   S.aiAsked=true;saveSettings();
-  const hasPn=!!S.keys.plantnet;
-  openModal('<h3>Du bist online! 🌍</h3><div class="mini muted" style="margin:4px 0 12px">Womit soll die Art bestimmt werden?</div>'
-    +'<button class="q-opt" onclick="chooseAi(\'inat\')"><span style="font-size:22px">🌍</span><span style="flex:1"><b>iNaturalist – echte KI</b><div class="mini muted">Weltweite Datenbank, ohne Schlüssel</div></span></button>'
-    +'<button class="q-opt" onclick="chooseAi(\'plantnet\')"><span style="font-size:22px">🌿</span><span style="flex:1"><b>Pl@ntNet – Foto-KI (Pflanzen)</b><div class="mini muted">'+(hasPn?'Schlüssel vorhanden':'braucht kostenlosen Schlüssel')+'</div></span></button>'
-    +'<button class="q-opt" onclick="chooseAi(\'ondevice\')"><span style="font-size:22px">📱</span><span style="flex:1"><b>On-Device KI – im Browser</b><div class="mini muted">Echte Foto-KI, läuft offline auf dem Gerät</div></span></button>'
-    +'<button class="q-opt" onclick="chooseAi(\'demo\')"><span style="font-size:22px">🎮</span><span style="flex:1"><b>Demo (Übung)</b><div class="mini muted">Ohne echte Erkennung – auch offline</div></span></button>'
+  const hasPn=!!plantnetKey();
+  openModal('<h3>Wie soll das Foto erkannt werden? 📷</h3><div class="mini muted" style="margin:4px 0 12px">Für „was ist das?" brauchst du eine echte Foto-KI:</div>'
+    +'<button class="q-opt" onclick="chooseAi(\'auto\')"><span style="font-size:22px">🤖</span><span style="flex:1"><b>Automatisch (empfohlen)</b><div class="mini muted">Die App wählt selbst: Pflanze → Pl@ntNet, sonst On-Device</div></span><span class="chip chip-em">empfohlen</span></button>'
+    +'<button class="q-opt" onclick="chooseAi(\'plantnet\')"><span style="font-size:22px">🌿</span><span style="flex:1"><b>Pl@ntNet – nur Pflanzen</b><div class="mini muted">Foto-KI speziell für Pflanzen · '+(hasPn?'Schlüssel vorhanden':'kostenloser Schlüssel')+'</div></span></button>'
+    +'<button class="q-opt" onclick="chooseAi(\'ondevice\')"><span style="font-size:22px">📱</span><span style="flex:1"><b>On-Device KI – ohne Schlüssel</b><div class="mini muted">Echte Foto-KI, läuft offline · erkennt grob (nicht jede Art genau)</div></span></button>'
+    +'<button class="q-opt" onclick="chooseAi(\'inat\')"><span style="font-size:22px">🔤</span><span style="flex:1"><b>iNaturalist – Namen suchen</b><div class="mini muted">Kein Foto-Scan: du tippst den Namen, weltweite Datenbank</div></span></button>'
+    +'<button class="q-opt" onclick="chooseAi(\'demo\')"><span style="font-size:22px">🎮</span><span style="flex:1"><b>Demo (Übung)</b><div class="mini muted">Rät nur – sieht das Foto NICHT an. Nur zum Ausprobieren/offline.</div></span></button>'
     +'<div class="mini muted" style="margin-top:6px">Jederzeit änderbar über „KI ▾" oder Profil → KI-Quelle.</div>');
 }
 function chooseAi(k){
-  if(k==='plantnet'&&!S.keys.plantnet){toast('Pl@ntNet braucht einen kostenlosen Schlüssel (Profil → KI-Quelle). Diesmal Demo.');S.provider='demo';}
+  if(k==='plantnet'&&!plantnetKey()){toast('Pl@ntNet braucht einen kostenlosen Schlüssel (Profil → KI-Quelle). Nutze solange On-Device KI.');S.provider='ondevice';}
   else S.provider=k;
   saveSettings();closeModal();updateModeBtn();proceedIdentify();
 }
@@ -1406,12 +1445,15 @@ function showCandidates(provider,cands){
       <button class="btn btn-ghost" style="margin-top:8px" onclick="closeModal()">Schließen</button></div>`);
     window._cands=cands;return;
   }
-  openModal(`<h3>Vorschläge · ${esc(provider)}</h3><div class="mini muted" style="margin:4px 0 12px">Bitte bestätige die richtige Art (du entscheidest):</div>
+  const c0=cands[0], low=(c0&&typeof c0.conf==='number'&&c0.conf<0.5);
+  const coach=low?`<div class="banner" style="background:#92400e;color:#fff;margin-bottom:10px"><div class="ic">🔎</div><div class="mini"><b>Ergebnis unsicher (${Math.round(c0.conf*100)} %).</b> So wird's besser: näher rangehen, scharf stellen, gutes Licht – und bei Pflanzen ein <b>klares Merkmal</b> fotografieren (Blüte, Blatt oder Rinde). Dann neu aufnehmen.</div></div>`:'';
+  openModal(`<h3>Vorschläge · ${esc(provider)}</h3>${coach}<div class="mini muted" style="margin:4px 0 12px">Bitte bestätige die richtige Art (du entscheidest):</div>
     ${cands.map((c,i)=>`<button class="q-opt" onclick="confirmSpecies(${i})">
       ${c.photo?`<img src="${c.photo}" style="width:40px;height:40px;border-radius:8px;object-fit:cover">`:`<span style="font-size:26px">${c.emoji}</span>`}
       <span style="flex:1"><b>${esc(c.de)}</b><div class="mini muted" style="font-style:italic">${esc(c.sci)}</div></span>
-      ${c.conf!=null?`<span class="chip chip-em">${Math.round(c.conf*100)}%</span>`:''}</button>`).join('')}
-    <button class="btn btn-ghost" style="margin-top:6px" onclick="closeModal()">Abbrechen</button>`);
+      ${c.conf!=null?`<span class="chip ${c.conf>=0.5?'chip-em':'chip-amb'}">${Math.round(c.conf*100)}%</span>`:''}</button>`).join('')}
+    <button class="btn btn-em" style="margin-top:6px" onclick="closeModal();go('scan')">📷 Besseres Foto machen</button>
+    <button class="btn btn-ghost" style="margin-top:8px" onclick="closeModal()">Abbrechen</button>`);
   window._cands=cands;
 }
 function inatSearchFlow(){
@@ -1573,7 +1615,37 @@ async function saveMissionProof(id){
   const verdict=checkObs(rec);rec.status=verdict.status;rec.checks=verdict.checks;
   rec.scoreImpact=verdict.status==='validated'?m.impact:0;rec.xp=m.xp+(verdict.status==='validated'?m.impact*2:0);
   await IDB.add(rec);OBS.push(rec);if(supaOn())supaSync(rec);bumpStreak();closeModal();
-  toast('Mission belegt: +'+rec.xp+' XP'+(rec.scoreImpact?' · +'+rec.scoreImpact+' Score':' (vorläufig)'));go('missions');
+  toast('Mission belegt: +'+rec.xp+' XP'+(rec.scoreImpact?' · +'+rec.scoreImpact+' Score':' (vorläufig)'));
+  if(isCleanup(m)){askCleanupAmount(rec.id);return;}
+  go('missions');
+}
+/* Sammel-/Müll-Aktion erkannt? → Menge abfragen (für die Bestenliste). */
+function isCleanup(m){return /müll|abfall|gewässer|sauber|reinig|clean|litter|sammel|putz/i.test((m.title||'')+' '+(m.desc||''));}
+function askCleanupAmount(recId){
+  openModal('<h3>🧺 Wie viel hast du gesammelt?</h3><div class="mini muted" style="margin:4px 0 10px">Für die Müll-Rangliste – wer sammelt am meisten? (Überspringen ist ok.)</div>'
+    +'<div class="row" style="gap:8px"><input type="number" id="amt" min="0" step="1" placeholder="Menge" style="flex:2"><select id="amtU" style="flex:1"><option value="Säcke">Säcke</option><option value="kg">kg</option><option value="Stück">Stück</option></select></div>'
+    +'<button class="btn btn-primary" style="margin-top:10px" onclick="saveCleanupAmount(\''+recId+'\')">Speichern</button>'
+    +'<button class="btn btn-ghost btn-sm" style="margin-top:6px" onclick="closeModal();go(\'missions\')">Überspringen</button>');
+}
+async function saveCleanupAmount(recId){
+  const rec=OBS.find(o=>o.id===recId);if(!rec){closeModal();go('missions');return;}
+  const v=parseFloat($('amt')&&$('amt').value);const u=($('amtU')&&$('amtU').value)||'Säcke';
+  if(!isNaN(v)&&v>0){rec.amount=v;rec.amountUnit=u;try{await IDB.add(rec);}catch(e){}if(supaOn())supaSync(rec);toast('Gespeichert: '+v+' '+u+' 🧺');}
+  closeModal();go('missions');
+}
+async function openLitterBoard(){
+  if(!supaOn())return toast('Für die Rangliste bitte Gruppencode/Cloud nutzen.');
+  openModal('<div style="text-align:center"><div class="spinner"></div><div class="mini muted">Lade Müll-Rangliste …</div></div>');
+  try{const c=supaCfg();let url=c.url.replace(/\/$/,'')+'/rest/v1/observations?select=observer,amount,amount_unit,class_code&amount=not.is.null&limit=3000';
+    if(S.classCode)url+='&class_code=eq.'+encodeURIComponent(S.classCode);
+    const r=await fetch(url,{headers:{apikey:c.key,Authorization:'Bearer '+c.key}});const rows=await r.json();
+    if(!Array.isArray(rows))throw 0;
+    const by={};rows.forEach(o=>{const u=o.observer||'—',unit=o.amount_unit||'Säcke';if(!by[u])by[u]={};by[u][unit]=(by[u][unit]||0)+(+o.amount||0);});
+    const board=Object.keys(by).map(u=>({u:u,parts:by[u],total:Object.values(by[u]).reduce((a,b)=>a+(+b),0)})).sort((a,b)=>b.total-a.total);
+    openModal('<h3>🏆 Müll-Rangliste</h3><div class="mini muted" style="margin:4px 0 10px">'+(S.classCode?'Gruppe „'+esc(S.classCode)+'"':'Alle')+' · wer hat am meisten gesammelt?</div>'
+      +(board.length?board.map((b,i)=>'<div class="row" style="justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--s200)"><span>'+(['🥇','🥈','🥉'][i]||((i+1)+'.'))+' <b>'+esc(b.u)+'</b></span><span class="mini">'+Object.entries(b.parts).map(function(p){return p[1]+' '+p[0];}).join(' · ')+'</span></div>').join(''):'<div class="mini muted">Noch keine Mengen erfasst. Erledige eine Müll-Aktion und trag die Menge ein.</div>')
+      +'<button class="btn btn-ghost" style="margin-top:10px" onclick="closeModal()">Schließen</button>');
+  }catch(e){openModal('<h3>🏆 Müll-Rangliste</h3><div class="mini muted" style="margin:8px 0">Konnte nicht laden.</div><button class="btn btn-ghost" onclick="closeModal()">Schließen</button>');}
 }
 
 /* ============================ QUIZ / LERNEN ============================ */
@@ -1600,7 +1672,7 @@ function makeQuestion(mode,exclude){
   else if(mode==='group'){q='Zu welcher Gruppe gehört '+s.de+'?';correct=s.grp;
     opts=pick([...new Set(SPECIES.map(x=>x.grp))].filter(b=>b!==correct),n).concat(correct);}
   else{q='Welche Art siehst du?';correct=s.de;opts=pick(quizPool().filter(x=>x.key!==s.key),n).map(x=>x.de).concat(correct);}
-  return {emoji:s.emoji,sci:s.sci,q,opts:pick(opts),correct,fact:s.fact,mode,key:s.key};
+  return {emoji:s.emoji,sci:s.sci,deName:s.de,q,opts:pick(opts),correct,fact:s.fact,mode,key:s.key};
 }
 let QZ=null;
 function startQuiz(mode){QZ={mode,i:0,n:5,right:0,daily:false,marks:[],used:[]};nextQ();}
@@ -1626,12 +1698,27 @@ function nextQ(){
     <div class="q-emoji" id="qImg">${QZ.cur.emoji}</div><h3 style="text-align:center;margin-bottom:6px">${esc(QZ.cur.q)}</h3>
     <div style="text-align:center;margin-bottom:12px"><button class="btn btn-ghost btn-sm" style="width:auto" onclick="speakQuestion()">🔊 Frage &amp; Antworten vorlesen</button></div>
     <div id="qOpts">${QZ.cur.opts.map(o=>`<button class="q-opt" onclick="answer(this,'${esc(o).replace(/'/g,"\\'")}')">${esc(o)}</button>`).join('')}</div>`);
-  loadQuizPhoto(QZ.cur.sci);
+  loadQuizPhoto(QZ.cur.sci,QZ.cur.deName);
 }
-/* Lädt online ein echtes Foto der Art (iNaturalist/Wikipedia) und ersetzt das Emoji im Quiz. */
-function loadQuizPhoto(sci){
-  if(!sci||!online())return;
-  speciesPhoto(sci).then(u=>{const el=document.getElementById('qImg');if(u&&el)el.innerHTML='<img src="'+u+'" alt="" style="width:132px;height:132px;object-fit:cover;border-radius:18px;box-shadow:0 4px 14px rgba(0,0,0,.12)">';}).catch(()=>{});
+/* Lädt ein echtes, SCHARFES und zur Art PASSENDES Foto fürs Quiz.
+   Zuverlässig: erst deutsche Wikipedia nach dem deutschen Namen (trifft fast immer),
+   dann iNaturalist mit EXAKTER Art-Prüfung. Race-Schutz: nur einsetzen, wenn noch dieselbe Frage. */
+let _qToken=0;
+async function quizPhotoUrl(sci,de){
+  let u=de?await wikiPhoto(de):null;         // z. B. „Elster" → korrektes Wikipedia-Bild
+  if(!u&&sci)u=await inatPhotoExact(sci);     // exakte Art bei iNaturalist (mittlere Größe)
+  if(!u&&sci)u=await wikiPhoto(sci);
+  return u;
+}
+async function inatPhotoExact(sci){
+  try{const r=await fetch('https://api.inaturalist.org/v1/taxa?q='+encodeURIComponent(sci)+'&rank=species&per_page=5&locale=de');
+    if(r.ok){const j=await r.json();const t=(j.results||[]).find(x=>x.name&&x.name.toLowerCase()===String(sci).toLowerCase());
+      const p=t&&t.default_photo;return (p&&(p.medium_url||p.url))||null;}
+  }catch(e){}return null;
+}
+function loadQuizPhoto(sci,de){
+  if(!online())return;const tok=++_qToken;
+  quizPhotoUrl(sci,de).then(u=>{if(tok!==_qToken)return;const el=document.getElementById('qImg');if(u&&el)el.innerHTML='<img src="'+u+'" alt="" style="width:150px;height:150px;object-fit:cover;border-radius:18px;box-shadow:0 4px 14px rgba(0,0,0,.12)">';}).catch(()=>{});
 }
 function answer(btn,val){
   const correct=QZ.cur.correct;
@@ -1951,6 +2038,10 @@ function supaCfg(){
 function supaOn(){const c=supaCfg();return !!(c.url&&c.key);}
 /* Ist die zentrale (eingebaute) Cloud im Einsatz – nicht eine selbst eingetragene? */
 function usingCentralCloud(){const s=S.supabase||{};return !(s.url&&s.key)&&!!(BIOGLOW_CLOUD.url&&BIOGLOW_CLOUD.key);}
+/* Zentraler Pl@ntNet-Schlüssel: einmal hier eintragen → alle nutzen die echte Pflanzen-Foto-KI,
+   ohne selbst etwas einzurichten. Ein eigener Schlüssel (Profil → KI-Quelle) hat Vorrang. */
+const BIOGLOW_PLANTNET_KEY='2b10Kjxr3YLBAUbhZAPgBHJWZ';   /* zentraler Pl@ntNet-API-Key – alle nutzen ihn automatisch */
+function plantnetKey(){return (S.keys&&S.keys.plantnet)||BIOGLOW_PLANTNET_KEY||'';}
 async function supaSync(o){
   const c=supaCfg();if(!c.url||!c.key)return false;
   try{
@@ -1958,7 +2049,9 @@ async function supaSync(o){
       headers:{'apikey':c.key,'Authorization':'Bearer '+c.key,'Content-Type':'application/json','Prefer':'return=minimal'},
       body:JSON.stringify({local_id:o.id,species_name:o.speciesSci||o.speciesDe,common_name:o.speciesDe,
         latitude:o.sensitive?Math.round((o.lat||0)/0.05)*0.05:o.lat,longitude:o.sensitive?Math.round((o.lng||0)/0.05)*0.05:o.lng,
-        status:o.status,score_impact:o.scoreImpact,observed_at:o.observedAt,source:o.source,observer:S.name,class_code:S.classCode||null})});
+        status:o.status,score_impact:o.scoreImpact,observed_at:o.observedAt,source:o.source,observer:S.name,class_code:S.classCode||null,
+        spot_id:o.spotId||null,spot_name:o.spotName||null,share:o.share||null,photo_url:o.photoUrl||null,
+        amount:(o.amount!=null?o.amount:null),amount_unit:o.amountUnit||null})});
     if(r.ok){o.synced=true;try{await IDB.add(o);}catch(e){}}
     return r.ok;
   }catch(e){return false;}
@@ -2903,31 +2996,77 @@ function openDataInfo(){
 function startMonitor(){
   const ids=[...new Set(OBS.filter(o=>o.source==='monitor').map(o=>o.spotId))];
   const spots=ids.map(id=>OBS.find(o=>o.spotId===id));
-  openModal('<h3>📈 Monitoring-Punkt</h3><div class="mini muted" style="margin:4px 0 10px">Fotografiere immer dieselbe Stelle. So siehst du Veränderungen über die Zeit – vor/nach Schnee, Starkregen oder Jahreszeiten.</div>'
+  openModal('<h3>📈 Monitoring-Punkt</h3>'
+    +'<div class="mini muted" style="margin:4px 0 8px">Fotografiere immer <b>genau dieselbe Stelle</b> (z. B. ein Stück Rasen). Mach alle paar Tage/Wochen ein neues Foto vom gleichen Fleck – BIOGLOW misst Grün-Index &amp; Wetter und zeigt dir die Veränderung.</div>'
+    +'<div class="mini" style="background:var(--s50);border-radius:10px;padding:8px 10px;margin-bottom:8px">🌱 <b>Beispiel:</b> Nach Regen ist der Rasen schön grün. Eine Woche bei 32 °C → er wird grau. Die App sagt dir dann: „gießen 💧".</div>'
     +(spots.length?'<div class="mini" style="font-weight:800;margin-bottom:6px">Vorhandene Punkte:</div>'+spots.map(s=>'<button class="q-opt" onclick="monitorAgain(\''+s.spotId+'\')"><span style="font-size:22px">📍</span><b>'+esc(s.spotName)+'</b></button>').join(''):'')
-    +'<label class="fld">Neuer Punkt – Name</label><input type="text" id="spotName" placeholder="z. B. Teichufer Nord">'
+    +'<label class="fld">Neuer Punkt – Name</label><input type="text" id="spotName" placeholder="z. B. Rasen am Schulhof">'
+    +'<label class="fld">Fotos teilen? (du entscheidest)</label><select id="spotShare"><option value="privat">🔒 Nur ich (Foto bleibt lokal)</option><option value="group">👥 Mit meiner Gruppe</option><option value="public">🌍 Öffentlich</option></select>'
+    +'<div class="mini muted" style="margin-top:4px">Teilen lädt das Foto in die Cloud, damit andere die Entwicklung mitverfolgen können. „Nur ich" bleibt auf dem Gerät.</div>'
     +'<button class="btn btn-primary" style="margin-top:10px" onclick="monitorNew()">📷 Foto aufnehmen</button>'
     +'<button class="btn btn-ghost" style="margin-top:8px" onclick="closeModal()">Abbrechen</button>');
 }
-function monitorNew(){const n=($('spotName')&&$('spotName').value.trim())||('Punkt '+new Date().toLocaleDateString('de-DE'));window._monitorSpot={id:'spot_'+uid().slice(0,8),name:n};closeModal();openCamera('__monitor__');}
-function monitorAgain(id){const s=OBS.find(o=>o.spotId===id);if(!s)return;window._monitorSpot={id:id,name:s.spotName};closeModal();openCamera('__monitor__');}
+function monitorNew(){const n=($('spotName')&&$('spotName').value.trim())||('Punkt '+new Date().toLocaleDateString('de-DE'));const share=($('spotShare')&&$('spotShare').value)||'privat';window._monitorSpot={id:'spot_'+uid().slice(0,8),name:n,share:share};closeModal();openCamera('__monitor__');}
+function monitorAgain(id){const s=OBS.find(o=>o.spotId===id);if(!s)return;window._monitorSpot={id:id,name:s.spotName,share:s.share||'privat'};closeModal();openCamera('__monitor__');}
+/* Opt-in: Foto nur hochladen, wenn die Person „teilen" gewählt hat. Braucht Supabase-Storage-Bucket „monitoring". */
+async function uploadMonitorPhoto(dataUrl,id){
+  try{const c=supaCfg();if(!c.url||!c.key)return null;
+    const blob=await (await fetch(dataUrl)).blob();
+    const file=encodeURIComponent(S.classCode||'public')+'/'+id+'_'+Date.now()+'.jpg';
+    const base=c.url.replace(/\/$/,'');
+    const r=await fetch(base+'/storage/v1/object/monitoring/'+file,{method:'POST',headers:{apikey:c.key,Authorization:'Bearer '+c.key,'Content-Type':'image/jpeg','x-upsert':'true'},body:blob});
+    if(r.ok)return base+'/storage/v1/object/public/monitoring/'+file;
+  }catch(e){}
+  return null;
+}
 async function saveMonitorShot(){
   const sp=window._monitorSpot;window._monitorSpot=null;if(!sp)return;
   openModal('<div style="text-align:center"><div class="spinner"></div><div class="muted mini">Standort & Umweltdaten werden erfasst …</div></div>');
   let pos=null;try{pos=await getPosition();}catch(e){}
   const env=online()?await fetchEnv(pos&&pos.lat,pos&&pos.lng):null;
   const now=new Date().toISOString();
-  const rec={id:uid(),source:'monitor',spotId:sp.id,spotName:sp.name,speciesDe:sp.name,emoji:'📍',
+  const rec={id:uid(),source:'monitor',spotId:sp.id,spotName:sp.name,share:sp.share||'privat',speciesDe:sp.name,emoji:'📍',
     photo:camPhoto,createdAt:now,observedAt:now,lat:pos&&pos.lat,lng:pos&&pos.lng,acc:pos&&pos.acc,
     green:window._analysis&&window._analysis.green,bright:window._analysis&&window._analysis.bright,env:env,status:'monitor',scoreImpact:0,xp:15};
+  if(rec.share&&rec.share!=='privat'&&supaOn()){const url=await uploadMonitorPhoto(camPhoto,sp.id);if(url)rec.photoUrl=url;}
   await IDB.add(rec);OBS.push(rec);if(supaOn())supaSync(rec);
-  toast('Monitoring-Foto gespeichert (+15 XP).');openMonitorSpot(sp.id);
+  toast('Monitoring-Foto gespeichert (+15 XP).'+(rec.photoUrl?' ☁️ geteilt.':''));openMonitorSpot(sp.id);
 }
+/* Altersgerechte Deutung eines Monitoring-Punkts: Zustand + Wetter → Erklärung + Tipp.
+   Beispiel: „Grün-Index gefallen bei Hitze/Trockenheit → gießen". */
+function monitorInsight(shots){
+  if(!shots||!shots.length)return null;
+  const last=shots[shots.length-1], first=shots[0], env=last.env||{};
+  const green=last.green, temp=env.temp, rain=env.rain, soil=env.soil;
+  const dGreen=(shots.length>=2&&first.green!=null&&green!=null)?(green-first.green):null;
+  const young=(S.easy||S.grade==='1'||S.grade==='2');
+  const hot=(temp!=null&&temp>=28), dry=((rain!=null&&rain<1)||(soil!=null&&soil<0.2));
+  let state='', tip='';
+  if(green!=null){
+    if(green>=55) state=young?'Die Fläche ist schön grün. 🌿':'Hoher Grün-Index – die Fläche ist vital.';
+    else if(green>=35) state=young?'Die Fläche ist mittel-grün.':'Mittlerer Grün-Index.';
+    else state=young?'Die Fläche ist eher grau/trocken. 🟤':'Niedriger Grün-Index – wirkt trocken oder kahl.';
+  }
+  if(dGreen!=null&&dGreen<=-8){
+    if(hot||dry){ state+=young?' Es war heiß und trocken.':' Rückgang bei Hitze/Trockenheit.';
+      tip=young?'Tipp: Wenn erlaubt, die Fläche gießen 💧 – oder schauen, ob es bald regnet.':'Empfehlung: bei anhaltender Trockenheit bewässern; Rückgang mit dem Wetter (Hitze, wenig Regen) dokumentieren.'; }
+    else { tip=young?'Tipp: Überlege, was sich verändert hat (gemäht? Schatten?).':'Empfehlung: mögliche Ursachen prüfen (Mahd, Beschattung, Tritt).'; }
+  } else if(dGreen!=null&&dGreen>=8){
+    state+=young?' Es ist grüner geworden – super!':' Zunahme des Grün-Index.';
+    tip=young?'Weiter beobachten! Vielleicht hat Regen geholfen. ☔':'Positive Entwicklung – ggf. mit Niederschlag/Bewässerung in Verbindung bringen.';
+  } else {
+    tip=young?'Mach in ein paar Tagen wieder ein Foto, um die Veränderung zu sehen.':'Für einen Trend weitere Aufnahmen im Abstand von Tagen/Wochen machen.';
+  }
+  return {state:state.trim(), tip:tip};
+}
+/* Tage seit letzter Aufnahme eines Punkts + ob „fällig" (Standard: 7 Tage). */
+function spotDays(id){const sh=OBS.filter(o=>o.spotId===id);if(!sh.length)return null;const last=sh.sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt))[0];return Math.floor((Date.now()-new Date(last.createdAt))/86400000);}
+function monitorDueCount(){const ids=[...new Set(OBS.filter(o=>o.source==='monitor').map(o=>o.spotId))];return ids.filter(id=>{const d=spotDays(id);return d!=null&&d>=7;}).length;}
 function openMonitor(){
   const ids=[...new Set(OBS.filter(o=>o.source==='monitor').map(o=>o.spotId))];
   if(!ids.length)return startMonitor();
   openModal('<h3>📈 Monitoring</h3><div class="mini muted" style="margin:4px 0 10px">Deine beobachteten Stellen im Zeitverlauf.</div>'
-    +ids.map(id=>{const shots=OBS.filter(o=>o.spotId===id);const s=shots[0];return '<button class="q-opt" onclick="openMonitorSpot(\''+id+'\')"><span style="font-size:22px">📍</span><span style="flex:1"><b>'+esc(s.spotName)+'</b><div class="mini muted">'+shots.length+' Aufnahme(n)</div></span></button>';}).join('')
+    +ids.map(id=>{const shots=OBS.filter(o=>o.spotId===id);const s=shots[0];const d=spotDays(id);const due=d!=null&&d>=7;return '<button class="q-opt" onclick="openMonitorSpot(\''+id+'\')"><span style="font-size:22px">📍</span><span style="flex:1"><b>'+esc(s.spotName)+'</b><div class="mini muted">'+shots.length+' Aufnahme(n)'+(d!=null?' · zuletzt vor '+d+' Tag(en)':'')+'</div></span>'+(due?'<span class="chip" style="background:#fef3c7;color:#b45309">📅 fällig</span>':'')+'</button>';}).join('')
     +'<button class="btn btn-primary" style="margin-top:8px" onclick="startMonitor()">＋ Neuer Punkt / Foto</button>');
 }
 function openMonitorSpot(id){
@@ -2936,7 +3075,9 @@ function openMonitorSpot(id){
   const s=shots[0],diff=(shots[shots.length-1].green||0)-(shots[0].green||0);
   openModal('<h3>📍 '+esc(s.spotName)+'</h3><div class="mini muted" style="margin:4px 0 10px">'+shots.length+' Aufnahme(n) · älteste zuerst.</div>'
     +shots.map(o=>'<div class="row" style="gap:10px;margin-bottom:8px"><img src="'+o.photo+'" style="width:64px;height:64px;border-radius:10px;object-fit:cover"><div><div class="mini"><b>'+new Date(o.createdAt).toLocaleDateString('de-DE')+'</b></div><div class="mini muted">🌱 Grün '+(o.green!=null?o.green+'%':'—')+(o.bright!=null?' · 💡 '+o.bright+'%':'')+(o.env&&o.env.temp!=null?' · 🌡️ '+Math.round(o.env.temp)+'°C':'')+'</div></div></div>').join('')
-    +(shots.length>=2?'<div class="mini" style="background:var(--em-tint);border-radius:10px;padding:10px;margin:6px 0">📊 Veränderung Grün-Index: <b>'+(diff>=0?'+':'')+diff+' %</b> von der ersten bis zur letzten Aufnahme.</div>':'')
+    +(shots.length>=2?'<div class="mini" style="background:var(--s50);border-radius:10px;padding:10px;margin:6px 0">📊 Veränderung Grün-Index: <b>'+(diff>=0?'+':'')+diff+' %</b> von der ersten bis zur letzten Aufnahme.</div>':'')
+    +(function(){const ins=monitorInsight(shots);return ins?('<div class="mini" style="background:var(--em-tint);border:1px solid var(--em-soft);border-radius:10px;padding:10px;margin:6px 0"><b>🔎 Was bedeutet das?</b><br>'+esc(ins.state)+(ins.tip?'<br><b>💡 '+esc(ins.tip)+'</b>':'')+'</div>'):'';})()
+    +(spotDays(id)!=null&&spotDays(id)>=7?'<div class="mini" style="color:#b45309;margin:4px 0">📅 Seit '+spotDays(id)+' Tagen kein neues Foto – Zeit für die nächste Aufnahme.</div>':'')
     +'<button class="btn btn-primary" style="margin-top:6px" onclick="monitorAgain(\''+id+'\')">📷 Neues Foto hier</button>'
     +'<button class="btn btn-ghost" style="margin-top:8px" onclick="closeModal()">Schließen</button>');
 }
