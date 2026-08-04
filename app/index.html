@@ -918,13 +918,15 @@ function openAiDebug(){
 /* 🤖 AUTO-Modus: „Point & Shoot" – die App wählt selbst.
    Trick: Pl@ntNets eigener Trefferwert ist das beste „ist das eine Pflanze?"-Signal.
    Hoher Pl@ntNet-Wert → Pflanze (Pl@ntNet). Sonst → On-Device (Tier, grob). Offline → On-Device. */
+/* Ab welchem Pl@ntNet-Trefferwert gilt es als „klar Pflanze" (im Feldtest leicht anpassbar). */
+const AUTO_PLANT_THRESHOLD=0.30;
 let _autoUsed='';
 async function autoIdentify(dataUrl){
   const canPn=online()&&!!plantnetKey();
   let pn=null;
   if(canPn){try{pn=await plantnetIdentify(dataUrl);}catch(e){}}
   const pnTop=(pn&&pn[0]&&typeof pn[0].conf==='number')?pn[0].conf:0;
-  if(pn&&pn.length&&pnTop>=0.15){_autoUsed='Auto → Pl@ntNet 🌿';return pn;}        // klar Pflanze → fertig (kein Modell-Download)
+  if(pn&&pn.length&&pnTop>=AUTO_PLANT_THRESHOLD){_autoUsed='Auto → Pl@ntNet 🌿';return pn;}   // klar Pflanze → fertig (weniger Falsch-„Pflanze" bei Tieren)
   let od=null;try{od=await ondeviceIdentify(dataUrl);}catch(e){}                    // sonst On-Device (Tier/unsicher)
   const odReject=od&&od[0]&&od[0].reject;
   const odTop=(od&&!odReject&&od[0]&&typeof od[0].conf==='number')?od[0].conf:0;
@@ -1362,27 +1364,46 @@ function onKeyInput(which,val){S.keys[which]=val.trim();saveSettings();}
 
 /* ============================ KAMERA ============================ */
 let camStream=null,camPhoto=null;
+/* Standardweg jetzt: die NATIVE Handy-Kamera (bester Autofokus/Makro + echte EXIF-Daten fürs Anti-Cheat).
+   Löst die typischen Web-Kamera-Probleme (getUserMedia-Video hat oft keinen Makro/Fokus). Live-Vorschau optional. */
 function openCamera(missionId){
   camPhoto=null;
   const monitor=missionId==='__monitor__';
   if(monitor){window._missionId=null;}
   else{window._missionId=missionId||null;window._monitorSpot=null;}
-  const label=monitor?'Monitoring-Foto':(missionId?'Beleg-Foto':'Beweisfoto');
+  window._camLabel=monitor?'Monitoring-Foto':(missionId?'Beleg-Foto':'Beweisfoto');
   const cam=$('cam');cam.classList.remove('hidden');
-  cam.innerHTML=`<div class="top"><b style="color:#fff">${label}</b><button class="cbtn" onclick="cancelCamera()">✕</button></div>
+  cam.innerHTML=`<div class="top"><b style="color:#fff">${window._camLabel}</b><button class="cbtn" onclick="cancelCamera()">✕</button></div>
+    <div class="view" style="display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;color:#fff">
+      <div style="font-size:52px;margin-bottom:8px">📷</div>
+      <div style="font-weight:800;font-size:17px;margin-bottom:6px">Foto aufnehmen</div>
+      <div class="mini" style="opacity:.85;max-width:290px;margin-bottom:18px">Nah heran, scharf stellen (Autofokus/Makro), gutes Licht. Bei Pflanzen die <b>Blüte</b> oder ein <b>Blatt</b> formatfüllend.</div>
+      <button class="btn btn-primary" style="max-width:270px" onclick="pickCamera()">📷 Handy-Kamera öffnen</button>
+      <button class="btn btn-ghost" style="max-width:270px;margin-top:10px;color:#fff;border:1px solid rgba(255,255,255,.35)" onclick="pickGallery()">🖼️ Aus Galerie wählen</button>
+      <button class="btn btn-ghost" style="max-width:270px;margin-top:10px;color:#fff;opacity:.85" onclick="startLive()">🎥 Live-Vorschau (im Browser)</button>
+    </div>
+    <input id="fileCam" type="file" accept="image/*" capture="environment" style="display:none" onchange="onFile(event,'camera')">
+    <input id="fileGal" type="file" accept="image/*" style="display:none" onchange="onFile(event,'upload')">`;
+}
+function pickCamera(){const el=$('fileCam');if(el)el.click();}
+function pickGallery(){const el=$('fileGal');if(el)el.click();}
+function startLive(){
+  const cam=$('cam');
+  cam.innerHTML=`<div class="top"><b style="color:#fff">${window._camLabel||'Foto'}</b><button class="cbtn" onclick="cancelCamera()">✕</button></div>
     <div class="view"><video id="vid" playsinline muted></video><div class="corners"><i style="top:16px;left:16px;border-right:0;border-bottom:0;border-radius:8px 0 0 0"></i><i style="top:16px;right:16px;border-left:0;border-bottom:0;border-radius:0 8px 0 0"></i><i style="bottom:16px;left:16px;border-right:0;border-top:0;border-radius:0 0 0 8px"></i><i style="bottom:16px;right:16px;border-left:0;border-top:0;border-radius:0 0 8px 0"></i></div></div>
-    <div class="controls"><button class="cbtn" onclick="pickFile()" title="Foto hochladen">🖼️</button><button class="shutter" id="shot" onclick="shoot()">📷</button><button class="cbtn" onclick="startCam()" title="Neu">🔄</button></div>
-    <input id="fileIn" type="file" accept="image/*" capture="environment" style="display:none" onchange="onFile(event)">`;
+    <div class="controls"><button class="cbtn" onclick="pickCamera()" title="Handy-Kamera (schärfer)">📷</button><button class="shutter" id="shot" onclick="shoot()">⚪</button><button class="cbtn" onclick="startCam()" title="Neu">🔄</button></div>`;
   startCam();
 }
 async function startCam(){
-  try{camStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1280}},audio:false});
+  try{camStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1920}},audio:false});
     const v=$('vid');if(v){v.srcObject=camStream;await v.play().catch(()=>{});}}
-  catch(e){toast('Kamera nicht verfügbar – nutze „Hochladen".');pickFile();}
+  catch(e){toast('Live-Kamera nicht verfügbar – nutze die Handy-Kamera.');pickCamera();}
 }
 function stopCam(){if(camStream){camStream.getTracks().forEach(t=>t.stop());camStream=null;}}
-function pickFile(){$('fileIn')&&$('fileIn').click();}
-async function onFile(ev){const f=ev.target.files&&ev.target.files[0];if(!f)return;window._photoSource='upload';try{window._exif=await readExif(f);}catch(e){window._exif={hasExif:false};}camPhoto=await fileToDataUrl(f);stopCam();afterPhoto();}
+function pickFile(){pickCamera();} /* Kompatibilität */
+/* Original nur zur Analyse; für Speicher/Datenschutz auf sinnvolle Größe verkleinern (EXIF vorher gelesen). */
+function downscaleDataUrl(url,max,q){return new Promise(function(res){const i=new Image();i.onload=function(){let w=i.width,h=i.height;const s=Math.min(1,(max||1600)/Math.max(w,h));if(s<1){w=Math.round(w*s);h=Math.round(h*s);}const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(i,0,0,w,h);try{res(c.toDataURL('image/jpeg',q||0.82));}catch(e){res(url);}};i.onerror=function(){res(url);};i.src=url;});}
+async function onFile(ev,src){const f=ev.target.files&&ev.target.files[0];if(!f)return;window._photoSource=(src==='camera')?'camera':'upload';try{window._exif=await readExif(f);}catch(e){window._exif={hasExif:false};}const full=await fileToDataUrl(f);camPhoto=await downscaleDataUrl(full,1600,0.82);stopCam();afterPhoto();}
 function shoot(){const v=$('vid');if(!v||!v.videoWidth){toast('Kamera noch nicht bereit …');return;}camPhoto=compress(v);window._photoSource='camera';window._exif=null;stopCam();afterPhoto();}
 function closeCamera(){stopCam();$('cam').classList.add('hidden');}
 function cancelCamera(){window._monitorSpot=null;window._missionId=null;window._isAudio=false;closeCamera();}
@@ -1488,7 +1509,7 @@ async function confirmSpecies(i){
   const now=new Date().toISOString();
   const rec={id:uid(),source:'scan',speciesKey:c.key,speciesSci:c.sci,speciesDe:c.de,emoji:c.emoji,grp:c.grp||'Art',
     photo:camPhoto,observedAt:now,createdAt:now,lat:pos&&pos.lat,lng:pos&&pos.lng,acc:pos&&pos.acc,area:area||null,
-    theme:S.theme||'none',confirms:0,photoSource:window._photoSource||'camera',exif:window._exif||null,sensitive:(SP_BY_KEY[c.key]&&SP_BY_KEY[c.key].sensitive)||false};
+    theme:S.theme||'none',confirms:0,conf:(typeof c.conf==='number'?c.conf:null),photoSource:window._photoSource||'camera',exif:window._exif||null,sensitive:(SP_BY_KEY[c.key]&&SP_BY_KEY[c.key].sensitive)||false};
   const verdict=checkObs(rec);rec.status=verdict.status;rec.checks=verdict.checks;
   const baseImpact=(SP_BY_KEY[c.key]&&SP_BY_KEY[c.key].impact)||c.impact||2;
   rec.scoreImpact=verdict.status==='validated'?baseImpact:0;
@@ -1505,17 +1526,32 @@ async function confirmSpecies(i){
 }
 /* Vertrauensscore der KI (0–1) → Label + Farbe. */
 function confLabel(v){return v>=0.75?['hohes Vertrauen','var(--em)']:v>=0.5?['mittleres Vertrauen','#f59e0b']:['niedriges Vertrauen','#f43f5e'];}
-/* Beobachtungsqualität A/B/C aus Foto-Schärfe, Standort, Zeit/Saison und Echtheit (EXIF/Kamera). */
+/* BIOGLOW-Beobachtungsqualität 0–100 aus 7 Merkmalen (Schärfe, Standort, EXIF, KI-Vertrauen,
+   Peer, Saison, Lebensraum). KEIN validierter Wissenschafts-Score – ein selbst entwickelter
+   Qualitäts-Index, der die Jury-Frage „Woher wisst ihr, dass eure Daten zuverlässig sind?" beantwortet. */
 function qualityGrade(rec){
   const a=window._analysis||{};
+  const conf=(typeof rec.conf==='number')?rec.conf:null;
+  const sharpOk=a.blurry!==true&&(a.sharp==null||a.sharp>=70);
+  const gpsOk=rec.lat!=null&&(rec.acc==null||rec.acc<=(RULES.gpsMaxAcc||60));
+  const exifOk=rec.photoSource==='camera'||(rec.exif&&rec.exif.hasExif);
+  const peerOk=(rec.confirms||0)>0;
+  const seasonOk=!(rec.checks||[]).some(x=>x.lvl==='warn'&&/(älter|untypisch|saison)/i.test(x.t));
+  const habitatOk=(rec.env!=null||rec.area!=null);
   const crit=[
-    {ok:a.blurry!==true&&(a.sharp==null||a.sharp>=70),label:'Foto scharf'},
-    {ok:rec.lat!=null&&(rec.acc==null||rec.acc<=(RULES.gpsMaxAcc||60)),label:'Standort genau'},
-    {ok:!rec.checks.some(x=>x.lvl==='warn'&&/(älter|untypisch)/i.test(x.t)),label:'Zeit & Saison plausibel'},
-    {ok:rec.photoSource==='camera'||(rec.exif&&rec.exif.hasExif),label:'Echtes Kamerafoto (EXIF)'}
+    {pts:sharpOk?20:0,ok:sharpOk,label:'Foto scharf'},
+    {pts:gpsOk?15:0,ok:gpsOk,label:'Standort genau'},
+    {pts:exifOk?10:0,ok:exifOk,label:'Echtes Kamerafoto (EXIF)'},
+    {pts:conf!=null?Math.round(conf*20):0,ok:conf!=null&&conf>=0.5,label:conf!=null?('KI-Vertrauen '+Math.round(conf*100)+'%'):'KI-Vertrauen (keins)'},
+    {pts:peerOk?15:0,ok:peerOk,label:'Von 2. Person bestätigt (Peer)'},
+    {pts:seasonOk?10:0,ok:seasonOk,label:'Passende Jahreszeit'},
+    {pts:habitatOk?10:0,ok:habitatOk,label:'Lebensraum-Daten erfasst'}
   ];
-  const n=crit.filter(c=>c.ok).length;
-  return {grade:n>=4?'A':n>=2?'B':'C',n:n,crit:crit};
+  const score=Math.min(100,crit.reduce((s,c)=>s+(c.pts||0),0));
+  const grade=score>=80?'A':score>=50?'B':'C';
+  const verdict=score>=80?'gut nutzbar (z. B. für GBIF)':score>=50?'brauchbar – noch verbesserbar':'bitte nachbessern';
+  const tips=[]; if(!sharpOk)tips.push('schärfer/näher fotografieren'); if(!gpsOk)tips.push('Standort aktivieren'); if(!peerOk)tips.push('von 2. Person bestätigen lassen'); if(conf==null||conf<0.5)tips.push('klares Merkmal (Blüte/Blatt) fotografieren');
+  return {score:score,grade:grade,verdict:verdict,tip:tips.slice(0,2).join(' · '),n:crit.filter(c=>c.ok).length,crit:crit};
 }
 function _confBlock(c){
   if(c.conf==null)return '<div class="mini muted" style="margin-bottom:10px">ℹ️ Diese Quelle liefert keinen KI-Vertrauenswert – bitte die Art selbst prüfen.</div>';
@@ -1523,8 +1559,13 @@ function _confBlock(c){
   return '<div class="mini" style="margin-bottom:10px"><div class="row" style="justify-content:space-between;margin-bottom:4px"><span><b>KI-Vertrauen</b></span><span style="color:'+l[1]+';font-weight:800">'+p+'% · '+l[0]+'</span></div><div style="height:7px;background:var(--s100);border-radius:6px;overflow:hidden"><div style="height:100%;width:'+p+'%;background:'+l[1]+'"></div></div><div class="mini muted" style="margin-top:4px">Warum? Plausibilität unten (Standort, Saison, Beweisfoto). Du entscheidest.</div></div>';
 }
 function _qualBlock(rec){
-  const q=qualityGrade(rec),col=q.grade==='A'?'var(--em)':q.grade==='B'?'#f59e0b':'#f43f5e';
-  return '<div class="mini" style="margin-bottom:12px;background:var(--s50);border-radius:12px;padding:10px"><div class="row" style="justify-content:space-between;margin-bottom:6px"><span><b>Beobachtungsqualität</b> <span class="muted">(für Citizen Science)</span></span><span style="font-weight:900;color:'+col+';font-size:16px">Note '+q.grade+'</span></div>'+q.crit.map(function(k){return '<div class="check-line"><span class="ci">'+(k.ok?'✅':'▫️')+'</span><span>'+esc(k.label)+'</span></div>';}).join('')+'</div>';
+  const q=qualityGrade(rec),col=q.score>=80?'var(--em)':q.score>=50?'#f59e0b':'#f43f5e';
+  return '<div class="mini" style="margin-bottom:12px;background:var(--s50);border-radius:12px;padding:10px">'
+    +'<div class="row" style="justify-content:space-between;margin-bottom:4px"><span><b>📷 Beobachtungsqualität</b> <span class="muted">(BIOGLOW · 7 Merkmale)</span></span><span style="font-weight:900;color:'+col+';font-size:18px">'+q.score+'/100</span></div>'
+    +'<div style="height:8px;background:var(--s100);border-radius:6px;overflow:hidden;margin-bottom:6px"><div style="height:100%;width:'+q.score+'%;background:'+col+'"></div></div>'
+    +'<div class="mini" style="color:'+col+';font-weight:700;margin-bottom:6px">'+esc(q.verdict)+'</div>'
+    +q.crit.map(function(k){return '<div class="check-line"><span class="ci">'+(k.ok?'✅':'▫️')+'</span><span>'+esc(k.label)+' <span class="muted">(+'+(k.pts||0)+')</span></span></div>';}).join('')
+    +(q.score<80&&q.tip?'<div class="mini" style="margin-top:6px;color:var(--em-d)">💡 Für mehr Punkte: '+esc(q.tip)+'</div>':'')+'</div>';
 }
 /* Level-Namen (Baustein „Level & Sammeln"). */
 const LEVEL_NAMES=['Frischling','Spürnase','Naturforscher:in','Artenkenner:in','Artenexpert:in','Öko-Profi','Habitat-Held:in','BIOGLOW-Meister:in'];
