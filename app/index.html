@@ -1526,7 +1526,9 @@ async function confirmSpecies(i){
   const verdict=checkObs(rec);rec.status=verdict.status;rec.checks=verdict.checks;
   const baseImpact=(SP_BY_KEY[c.key]&&SP_BY_KEY[c.key].impact)||c.impact||2;
   rec.scoreImpact=verdict.status==='validated'?baseImpact:0;
-  rec.xp=RULES.scanXp+(verdict.status==='validated'?baseImpact*2:0);
+  /* Punkte NUR bei bestätigter Qualität. „Vorläufig" (unscharf/unsicher) gibt nur wenig XP,
+     „Unvollständig" (leer/dunkel) gar nichts – so gibt es nicht mehr „für alle Bilder Punkte". */
+  rec.xp=verdict.status==='validated'?(RULES.scanXp+baseImpact*2):(verdict.status==='flagged'?3:0);
   rec.info=info;rec.env=env;rec.gbif=gbif;rec.area=area;
   rec.green=window._analysis&&window._analysis.green;rec.isAudio=!!window._isAudio;
   const _prevLvl=level();
