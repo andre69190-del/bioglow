@@ -928,8 +928,31 @@ function openAiDebug(){
    Hoher Pl@ntNet-Wert → Pflanze (Pl@ntNet). Sonst → On-Device (Tier, grob). Offline → On-Device. */
 /* Ab welchem Pl@ntNet-Trefferwert gilt es als „klar Pflanze" (im Feldtest leicht anpassbar). */
 const AUTO_PLANT_THRESHOLD=0.30;
+/* 🚧 Türsteher: erkennt VOR der Artbestimmung, ob das Foto ein Mensch oder ein klarer
+   Gegenstand (Tisch, Stuhl, Technik …) ist. Nutzt Browser-Gesichtserkennung + On-Device-Labels.
+   Wichtig: nur bei KLAREM Nicht-Lebewesen ablehnen (sonst würden echte Pflanzen fälschlich rausfliegen). */
+async function kingdomGate(dataUrl){
+  try{
+    const img=await dataUrlToImg(dataUrl);
+    if(await containsFace(img))return 'person';
+    const net=await ensureMobilenet();
+    const preds=await net.classify(img,5)||[];
+    const top=preds[0];
+    if(top){
+      const label=(top.className||'').toLowerCase().replace(/[ ,]/g,'_');
+      const p=top.probability||0;
+      // Klarer Gegenstand mit hoher Sicherheit → ablehnen. Zusätzlich: keines der Top-Labels sieht nach Natur aus.
+      const anyNature=preds.some(x=>NATURE_RE.test((x.className||'').toLowerCase()));
+      if(p>=0.35&&NONNATURE_RE.test(label)&&!anyNature)return 'object';
+    }
+  }catch(e){}
+  return 'ok';
+}
 let _autoUsed='';
 async function autoIdentify(dataUrl){
+  const gate=await kingdomGate(dataUrl);
+  if(gate==='person'){_autoUsed='Auto';return [{reject:true,reason:'face',de:'Das sieht nach einem Menschen aus 🙂',hint:'BIOGLOW bestimmt Pflanzen, Tiere und Pilze – bitte fotografiere ein Lebewesen (Blatt, Blüte, Insekt …).'}];}
+  if(gate==='object'){_autoUsed='Auto';return [{reject:true,reason:'nonnature',de:'Kein Lebewesen erkannt',hint:'Das sieht nach einem Gegenstand aus (z. B. Möbel/Technik). Bitte eine Pflanze, ein Tier oder einen Pilz fotografieren.'}];}
   const canPn=online()&&!!plantnetKey();
   let pn=null;
   if(canPn){try{pn=await plantnetIdentify(dataUrl);}catch(e){}}
