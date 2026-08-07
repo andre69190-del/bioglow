@@ -799,14 +799,30 @@ const NONNATURE_RE=/\b(wig|mask|ski_?mask|bathing_?cap|shower_?cap|bonnet|sungla
 const NATURE_RE=/(bee|wasp|hornet|butterfl|moth|beetle|ladyb|mantis|\bant\b|grasshopper|cricket|dragonfly|weevil|leafhopper|bird|jay|magpie|finch|robin|sparrow|owl|duck|goose|crane|stork|jackdaw|chickadee|titmouse|wren|kite|hawk|woodpecker|frog|toad|newt|salamander|lizard|snake|gecko|iguana|skink|spider|scorpion|snail|slug|mushroom|fungus|agaric|bolete|earthstar|stinkhorn|daisy|dandelion|flower|orchid|rose|tulip|sunflower|\bhip\b|tree|oak|pine|maple|willow|leaf|acorn|cypress|\bfir\b|fox|hedgehog|squirrel|mouse|rabbit|hare|deer|\bbat\b|mole|shrew|vole|marmot|coral|caterpillar|worm|centipede|millipede|\bmoss\b|fern|fruit|berry|corn)/;
 /* Optional stärkere Sperre: Browser-eigene Gesichtserkennung (kein Download). Wenn nicht
    verfügbar (z. B. Desktop ohne Flag), greift weiterhin der Wort-Filter oben. */
+/* Anteil hautfarbener Pixel (0..1). Grobe Heuristik – funktioniert OHNE FaceDetector-API,
+   also auch in Safari/Firefox/Android. Graues/braunes Totholz (r≈g) wird durch r>g>b + |r-g|>15 ausgeschlossen. */
+function skinFraction(img){
+  try{
+    const w=48,h=48,c=document.createElement('canvas');c.width=w;c.height=h;
+    const ctx=c.getContext('2d');ctx.drawImage(img,0,0,w,h);
+    const d=ctx.getImageData(0,0,w,h).data;let skin=0,tot=0;
+    for(let i=0;i<d.length;i+=4){const r=d[i],g=d[i+1],b=d[i+2];tot++;
+      const mx=Math.max(r,g,b),mn=Math.min(r,g,b);
+      if(r>95&&g>40&&b>20&&(mx-mn)>15&&Math.abs(r-g)>15&&r>g&&r>b)skin++;
+    }
+    return tot?skin/tot:0;
+  }catch(e){return 0;}
+}
 async function containsFace(img){
   try{
     if('FaceDetector' in window){
       const fd=new window.FaceDetector({fastMode:true,maxDetectedFaces:1});
       const faces=await fd.detect(img);
-      return !!(faces&&faces.length);
+      if(faces&&faces.length)return true;
     }
-  }catch(e){/* Detector nicht nutzbar → kein harter Block, Wort-Filter reicht */}
+  }catch(e){/* Detector nicht nutzbar → Rückfall unten */}
+  /* Rückfall ohne FaceDetector: sehr hoher Hautfarben-Anteil → wahrscheinlich Mensch/Körperteil (z. B. Kopf/Hand). */
+  try{if(skinFraction(img)>=0.35)return true;}catch(e){}
   return false;
 }
 /* Versucht, ein englisches MobileNet-Label auf den lokalen Katalog abzubilden (grobe Stichwort-Suche). */
