@@ -526,6 +526,14 @@ function checkObs(o){
     if(sp.months&&!sp.months.includes(mth))add('warn',sp.de+' ist im Monat '+mth+' untypisch – bitte prüfen.');else add('ok','Jahreszeitlich plausibel.');
     if(sp.sensitive)add('info','Gefährdete Art – Standort wird öffentlich unscharf gezeigt.');}
   exifChecks(o).forEach(x=>add(x[0],x[1]));
+  /* Qualitäts-/Sicherheits-Gate: schlechte oder sehr unsichere Funde geben KEINEN Habitat-Score. */
+  if(o.source==='scan'){
+    const an=window._analysis||{};
+    if(an.bright!=null&&(an.bright<8||an.bright>97))add('error','Foto zu dunkel/überbelichtet – kein Motiv erkennbar.');
+    else if(an.sharp!=null&&an.sharp<8)add('error','Foto ohne erkennbares Motiv (leer/flach).');
+    else if(an.blurry)add('warn','Foto unscharf – für Punkte bitte schärfer fotografieren.');
+    if(o.conf!=null&&o.conf<0.20)add('warn','KI sehr unsicher ('+Math.round(o.conf*100)+' %) – bitte prüfen oder ein besseres Foto machen.');
+  }
   const err=c.some(x=>x.lvl==='error'),warn=c.some(x=>x.lvl==='warn');
   return {checks:c,status:err?'pending':warn?'flagged':'validated'};
 }
@@ -1409,11 +1417,16 @@ function closeCamera(){stopCam();$('cam').classList.add('hidden');}
 function cancelCamera(){window._monitorSpot=null;window._missionId=null;window._isAudio=false;closeCamera();}
 
 /* Nach Foto: identifizieren → bestätigen → speichern */
+/* Leeres/dunkles/überstrahltes Foto ohne Motiv erkennen (z. B. „schwarzes Bild"). */
+function photoLooksEmpty(a){if(!a)return false;const dark=(a.bright!=null&&a.bright<8);const blown=(a.bright!=null&&a.bright>97);const flat=(a.sharp!=null&&a.sharp<8);return dark||blown||flat;}
+function emptyPhotoReject(){openModal('<div style="text-align:center"><div style="font-size:40px">🌑</div><h3>Kein Motiv erkennbar</h3><div class="mini muted" style="margin:8px 0 14px">Das Foto ist zu dunkel, überbelichtet oder leer. Bitte eine <b>Pflanze oder ein Tier formatfüllend und scharf</b> fotografieren.</div><button class="btn btn-em" onclick="closeModal();go(\'scan\')">📷 Neues Foto</button><button class="btn btn-ghost" style="margin-top:8px" onclick="closeModal()">Schließen</button></div>');}
 async function afterPhoto(){
   closeCamera();
   window._isAudio=false;
   // Foto analysieren (Schärfe + Grün-Index).
   window._analysis=await analyzePhoto(camPhoto);
+  // Leeres/dunkles Foto → kein Motiv → keine Erkennung, keine Punkte (Monitoring darf Flächen abbilden).
+  if(!window._monitorSpot&&photoLooksEmpty(window._analysis)){return emptyPhotoReject();}
   if(window._monitorSpot){return saveMonitorShot();}
   if(window._missionId){return saveMissionProof(window._missionId);}
   // Foto-Coach: bei unscharfem Foto einen Tipp geben und Neuaufnahme anbieten.
