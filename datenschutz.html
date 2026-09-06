@@ -27,16 +27,28 @@
   <ul>
     <li><b>Lokal auf dem Gerät (Standard):</b> Fotos, Tonaufnahmen, Fundorte, Notizen und Einstellungen
       bleiben im Browser-Speicher des Geräts. Ohne Cloud verlassen sie das Gerät nicht.</li>
-    <li><b>Live-Abfragen bei der Bestimmung:</b> Es wird nur der <b>Standort der Abfrage</b> übermittelt
-      (kein Name, kein Konto) an offene Dienste: iNaturalist, GBIF, Open-Meteo, OpenStreetMap/Overpass,
-      Wikipedia (Artfotos/Infos); optional Pl@ntNet/Kindwise/BirdNET nur mit eigenem Schlüssel.</li>
+    <li><b>Artbestimmung per Foto (Pl@ntNet):</b> In der Voreinstellung „Automatisch" und bei der
+      Auswahl „Pl@ntNet" wird das aufgenommene <b>Foto</b> zur Bestimmung an <b>Pl@ntNet</b>
+      (my-api.plantnet.org) übertragen – ohne Namen, ohne Konto, ohne Standort. Bei der
+      Mehrbild-Bestimmung sind es bis zu fünf Fotos derselben Pflanze. Wer das nicht möchte, wählt
+      im Profil unter „KI-Quelle" die <b>On-Device-KI</b> oder <b>Demo</b> – dann verlässt kein Bild
+      das Gerät.</li>
+    <li><b>Weitere Live-Abfragen:</b> Für Steckbrief, Verbreitung, Wetter und Gebietsnamen wird
+      <b>nur der Standort der Abfrage</b> übermittelt (kein Name, kein Konto) an offene Dienste:
+      iNaturalist, GBIF, Open-Meteo, OpenStreetMap/Overpass, Wikipedia (Artfotos/Infos). Der Standort
+      geht auch an iNaturalist, um die Vorschlagsliste nach den Arten zu sortieren, die in der
+      Umgebung und in dieser Jahreszeit gemeldet sind (abschaltbar in den Einstellungen).
+      Optional BirdNET – nur mit selbst eingetragenem Endpoint.</li>
     <li><b>On-Device-KI (optional):</b> Bei Wahl der „On-Device-KI" lädt der Browser einmalig ein
       Erkennungsmodell (TensorFlow.js/MobileNet) aus einem CDN; die Erkennung läuft danach lokal –
       Fotos werden dabei nicht hochgeladen.</li>
     <li><b>Zentrale Cloud (Supabase, selbst gehostet):</b> Sobald ein <b>Gruppencode</b> genutzt oder ein
       Fund/eine Aktion geteilt wird, werden gespeichert: Artname, Zeitpunkt, Status, Punkte, frei
       gewählter <b>Anzeigename</b>, Gruppencode und ein <b>grob gerundeter</b> Standort (bei gefährdeten
-      Arten zusätzlich unscharf). <b>Fotos werden nicht hochgeladen.</b></li>
+      Arten zusätzlich unscharf). <b>Fund-Fotos werden nicht hochgeladen.</b></li>
+    <li><b>Monitoring-Fotos beim Teilen:</b> Wird ein Monitoring-Foto ausdrücklich mit einer Gruppe
+      oder öffentlich geteilt, wird <b>dieses Bild</b> in den Speicher der zentralen Cloud geladen und
+      ist dann über seine Adresse abrufbar. Fotos, die auf „privat" stehen, bleiben auf dem Gerät.</li>
     <li><b>Feedback &amp; Umfrage (freiwillig):</b> Beim Absenden von „Fehler/Feedback melden" oder der
       „Kurzen Umfrage" werden die Angaben (Text bzw. Antworten, Anzeigename, Sprache, Zeitpunkt) in der
       zentralen Cloud gespeichert und können per E-Mail an den Betreiber (farndt691@gmail.com) gemeldet
