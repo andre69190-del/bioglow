@@ -273,6 +273,11 @@ const WORKSHEETS = [
 ];
 
 const RULES = {photoMaxAgeH:48,gpsMaxAcc:80,scoreMin:0,scoreMax:100,scanXp:40,base:50,radiusM:1500};
+/* Schaerfe-Schwellen fuer analyzePhoto(). Der Wert ist kontrast-normiert und damit
+   unabhaengig von Aufloesung und Motivkontrast. Zum Nachjustieren: Entwicklermodus
+   einschalten (Profil -> KI-Diagnose), dort steht der gemessene Wert des letzten Fotos. */
+const SHARP_EMPTY = 8;   /* darunter: kein Motiv erkennbar (leer/flach) */
+const SHARP_MIN   = 45;  /* darunter: unscharf -> Foto-Coach, keine Qualitaetspunkte */
 
 /* ---------- kleiner IndexedDB-Wrapper (offline-Speicher) ---------- */
 const IDB = (()=>{
@@ -297,7 +302,7 @@ const IDB = (()=>{
 /* ---------- Einstellungen (localStorage) ---------- */
 const LS='bioglow-settings';
 function loadSettings(){try{return Object.assign(defSettings(),JSON.parse(localStorage.getItem(LS)||'{}'));}catch(e){return defSettings();}}
-function defSettings(){return {mode:'explorer',provider:'auto',keys:{plantnet:'',kindwise:'',birdnet:''},streak:0,lastDaily:'',dailyBest:0,grade:'3',supabase:{url:'',key:''},classCode:'',theme:'none',blitz:null,customMissions:[],stations:[],wrongPool:[],name:'Forscher:in',dark:false,bigText:false,cb:false,easy:false,useGps:true,fuzzAll:false,publicDefault:false,pin:'',blitzMin:15,lang:'de',aiAsked:false,gemmaUrl:'',period:30,devMode:false,onbVariant:'',onbRating:'',onbHide:true,surveyDone:false};}
+function defSettings(){return {mode:'explorer',provider:'auto',keys:{plantnet:'',kindwise:'',birdnet:''},streak:0,lastDaily:'',dailyBest:0,grade:'3',supabase:{url:'',key:''},classCode:'',theme:'none',blitz:null,customMissions:[],stations:[],wrongPool:[],name:'Forscher:in',dark:false,bigText:false,cb:false,easy:false,useGps:true,geoPrior:true,fuzzAll:false,publicDefault:false,pin:'',blitzMin:15,lang:'de',aiAsked:false,gemmaUrl:'',period:30,devMode:false,onbVariant:'',onbRating:'',onbHide:true,surveyDone:false};}
 let S = loadSettings();
 function saveSettings(){try{localStorage.setItem(LS,JSON.stringify(S));}catch(e){}}
 
@@ -530,7 +535,7 @@ function checkObs(o){
   if(o.source==='scan'){
     const an=window._analysis||{};
     if(an.bright!=null&&(an.bright<8||an.bright>97))add('error','Foto zu dunkel/überbelichtet – kein Motiv erkennbar.');
-    else if(an.sharp!=null&&an.sharp<8)add('error','Foto ohne erkennbares Motiv (leer/flach).');
+    else if(an.sharp!=null&&an.sharp<SHARP_EMPTY)add('error','Foto ohne erkennbares Motiv (leer/flach).');
     else if(an.blurry)add('warn','Foto unscharf – für Punkte bitte schärfer fotografieren.');
     if(o.conf!=null&&o.conf<0.20)add('warn','KI sehr unsicher ('+Math.round(o.conf*100)+' %) – bitte prüfen oder ein besseres Foto machen.');
   }
@@ -580,7 +585,10 @@ function compress(srcEl,max){max=max||1024;let w=srcEl.videoWidth||srcEl.natural
   if(w>max||h>max){if(w>h){h=Math.round(h/w*max);w=max;}else{w=Math.round(w/h*max);h=max;}}
   const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(srcEl,0,0,w,h);
   return c.toDataURL('image/jpeg',0.72);}
-function fileToDataUrl(file){return new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>{const img=new Image();img.onload=()=>res(compress(img));img.onerror=rej;img.src=e.target.result;};r.onerror=rej;r.readAsDataURL(file);});}
+/* Rohbild als DataURL – bewusst OHNE Kompression. Verkleinert wird ausschliesslich
+   in downscaleDataUrl(), sonst greift dessen Zielaufloesung nie (das Bild waere schon
+   kleiner) und das Foto wuerde zweimal JPEG-komprimiert. */
+function fileToDataUrl(file){return new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.onerror=rej;r.readAsDataURL(file);});}
 
 /* ---------- EXIF-Metadaten lesen (Anti-Cheat „Detective-KI") ----------
    Kompression per Canvas entfernt EXIF – deshalb lesen wir die Rohdatei vorher aus.
@@ -649,9 +657,12 @@ const PROVIDERS={
   ondevice:{label:'On-Device KI – Foto offline (TensorFlow.js)',needsKey:false,online:false},
   inat:{label:'iNaturalist – echte Artensuche (ohne Schlüssel)',needsKey:false,online:true},
   plantnet:{label:'Pl@ntNet – Pflanzenfotos (Schlüssel)',needsKey:'plantnet',online:true},
-  kindwise:{label:'Kindwise Plant.id / Insect.id (Schlüssel)',needsKey:'kindwise',online:true},
   gemma:{label:'Gemma – Erklär-KI (offline, on-device · kein Arten-Scan)',needsKey:'gemma',online:false}
 };
+/* Sicherheitsnetz: Wer frueher „Kindwise" ausgewaehlt hatte, hat das noch in seinen
+   gespeicherten Einstellungen. Ohne diese Zeile wuerde das Profil beim Rendern
+   ueber einen nicht mehr vorhandenen Anbieter stolpern. */
+if(!PROVIDERS[S.provider]){S.provider='auto';saveSettings();}
 function seedRand(str){let h=2166136261;for(let i=0;i<str.length;i++){h^=str.charCodeAt(i);h=Math.imul(h,16777619);}return (h>>>0)/2**32;}
 
 /* Demo-Vorschläge aus lokalem Katalog, nach Saison gewichtet */
@@ -748,13 +759,27 @@ function emojiForIconic(n){return {Aves:'🐦',Insecta:'🐝',Amphibia:'🐸',Re
 function germanIconic(n){return {Aves:'Vogel',Insecta:'Insekt',Amphibia:'Amphibie',Reptilia:'Reptil',Mammalia:'Säugetier',Plantae:'Pflanze',Fungi:'Pilz'}[n]||'Art';}
 
 /* Pl@ntNet Bildbestimmung (braucht Schlüssel; Best-Effort, CORS abhängig) */
-async function plantnetIdentify(dataUrl){
+/* shots (optional) = bis zu 5 Aufnahmen desselben Individuums mit Organ-Angabe:
+   [{url,organ:'flower'|'leaf'|'fruit'|'bark'|'auto'}] - genau so empfiehlt es
+   Pl@ntNet selbst, und es ist der groesste Einzelgewinn bei Pflanzen.
+   lang liefert deutsche Trivialnamen statt englischer. */
+let _pnQuota=null;
+async function plantnetIdentify(dataUrl,shots){
   const key=plantnetKey();if(!key)throw new Error('Kein Pl@ntNet-Schlüssel');
-  const blob=await (await fetch(dataUrl)).blob();
-  const fd=new FormData();fd.append('images',blob,'photo.jpg');fd.append('organs','auto');
-  const r=await fetch('https://my-api.plantnet.org/v2/identify/all?api-key='+encodeURIComponent(key),{method:'POST',body:fd});
+  const list=(shots&&shots.length)?shots.slice(0,5):[{url:dataUrl,organ:'auto'}];
+  const fd=new FormData();
+  for(let i=0;i<list.length;i++){
+    const blob=await (await fetch(list[i].url)).blob();
+    fd.append('images',blob,'photo'+i+'.jpg');
+    fd.append('organs',list[i].organ||'auto');
+  }
+  const qs='?api-key='+encodeURIComponent(key)+'&lang='+encodeURIComponent(S.lang||'de')+'&nb-results=5';
+  const r=await fetch('https://my-api.plantnet.org/v2/identify/all'+qs,{method:'POST',body:fd});
+  /* 404 heisst bei Pl@ntNet: „das ist keine Pflanze" – ein nuetzliches Signal, kein Fehler. */
+  if(r.status===404)throw new Error('Pl@ntNet: keine Pflanze erkannt');
   if(!r.ok)throw new Error('Pl@ntNet '+r.status);const j=await r.json();
-  return (j.results||[]).slice(0,4).map(x=>({key:'pn_'+(x.species.scientificNameWithoutAuthor||'').replace(/\s/g,'_'),
+  if(typeof j.remainingIdentificationRequests==='number')_pnQuota=j.remainingIdentificationRequests;
+  return (j.results||[]).slice(0,5).map(x=>({key:'pn_'+(x.species.scientificNameWithoutAuthor||'').replace(/\s/g,'_'),
     sci:x.species.scientificNameWithoutAuthor,de:(x.species.commonNames&&x.species.commonNames[0])||x.species.scientificNameWithoutAuthor,
     emoji:'🌿',grp:'Pflanze',impact:2,conf:x.score,fact:''}));
 }
@@ -762,6 +787,32 @@ async function plantnetIdentify(dataUrl){
 /* ---------- On-Device KI: echte Bilderkennung im Browser (TensorFlow.js + MobileNet) ---------- */
 /* Läuft lokal auf dem Gerät. Modell wird beim 1. Mal aus dem CDN geladen (~16 MB) und danach
    vom Browser gecacht → funktioniert anschließend auch offline. Kein Server, keine Daten verlassen das Gerät. */
+const AI_CACHE='bioglow-ai-v1';
+let _aiCacheN=0;
+async function aiCacheCount(){try{const c=await caches.open(AI_CACHE);return (await c.keys()).length;}catch(e){return 0;}}
+/* Laedt Bibliothek und Modell einmal aktiv und rechnet ein Bild durch, damit wirklich
+   ALLE Gewichtsdateien angefordert werden. Der Service-Worker legt jede dieser Dateien
+   dauerhaft im Cache ab (siehe sw.js) – danach laeuft die On-Device-KI auch ohne Netz. */
+try{aiCacheCount().then(function(n){_aiCacheN=n;});}catch(e){}
+async function prepareOffline(){
+  if(!online()){toast('Dafür braucht die App einmal kurz Internet.');return;}
+  openModal('<div style="text-align:center"><div class="q-emoji">📦</div><h3>KI wird für offline vorbereitet</h3><div class="mini muted" style="margin:8px 0 12px">Beim ersten Mal rund 16 MB. Bitte das Fenster offen lassen.</div><div class="spinner"></div></div>');
+  try{
+    await ensureMobilenet();
+    const c=document.createElement('canvas');c.width=224;c.height=224;
+    const x=c.getContext('2d');x.fillStyle='#3f7d55';x.fillRect(0,0,224,224);
+    x.fillStyle='#8fce9b';x.beginPath();x.arc(112,112,60,0,6.284);x.fill();
+    await _mnet.classify(c,1);
+    _aiCacheN=await aiCacheCount();
+    openModal('<div style="text-align:center"><div class="q-emoji">✅</div><h3>KI ist jetzt offline verfügbar</h3>'
+      +'<div class="mini muted" style="margin:8px 0 12px">'+_aiCacheN+' Dateien dauerhaft gespeichert. Die Arterkennung auf dem Gerät funktioniert ab jetzt auch ohne Empfang – ideal vor dem Demo-Tag.</div>'
+      +'<button class="btn btn-primary" onclick="closeModal()">Fertig</button></div>');
+  }catch(e){
+    openModal('<div style="text-align:center"><div class="q-emoji">⚠️</div><h3>Hat nicht geklappt</h3>'
+      +'<div class="mini muted" style="margin:8px 0 12px">'+esc(e.message||String(e))+'<br>Bitte mit stabilem WLAN erneut versuchen.</div>'
+      +'<button class="btn btn-ghost" onclick="closeModal()">Schließen</button></div>');
+  }
+}
 let _mnet=null,_mnetLoading=null;
 function loadScript(src){return new Promise((res,rej)=>{const s=document.createElement('script');s.src=src;s.async=true;s.onload=res;s.onerror=()=>rej(new Error('Skript nicht ladbar'));document.head.appendChild(s);});}
 async function ensureMobilenet(){
@@ -813,16 +864,31 @@ function skinFraction(img){
     return tot?skin/tot:0;
   }catch(e){return 0;}
 }
+/* Anteil klar gruener Pixel – Vegetation. Dient nur dazu, den Hautfarben-Rueckfall
+   unten zu entschaerfen: Rinde, Totholz, Herbstlaub und Marienkaefer erfuellen die
+   Hautfarben-Regel ebenfalls, stehen aber meist im Gruenen. */
+function greenFraction(img){
+  try{
+    const w=48,h=48,c=document.createElement('canvas');c.width=w;c.height=h;
+    const ctx=c.getContext('2d',{willReadFrequently:true});ctx.drawImage(img,0,0,w,h);
+    const d=ctx.getImageData(0,0,w,h).data;let gr=0,tot=0;
+    for(let i=0;i<d.length;i+=4){tot++;if(d[i+1]>d[i]+12&&d[i+1]>d[i+2]+12)gr++;}
+    return tot?gr/tot:0;
+  }catch(e){return 0;}
+}
 async function containsFace(img){
+  /* Wenn der Browser eine echte Gesichtserkennung hat, zaehlt allein deren Urteil –
+     auch ein „kein Gesicht". Die Farbregel darf dann nicht mehr dazwischenfunken. */
   try{
     if('FaceDetector' in window){
       const fd=new window.FaceDetector({fastMode:true,maxDetectedFaces:1});
       const faces=await fd.detect(img);
-      if(faces&&faces.length)return true;
+      return !!(faces&&faces.length);
     }
   }catch(e){/* Detector nicht nutzbar → Rückfall unten */}
-  /* Rückfall ohne FaceDetector: sehr hoher Hautfarben-Anteil → wahrscheinlich Mensch/Körperteil (z. B. Kopf/Hand). */
-  try{if(skinFraction(img)>=0.35)return true;}catch(e){}
+  /* Rueckfall ohne FaceDetector: bewusst zurueckhaltend. Ein faelschlich akzeptiertes
+     Selfie ist harmloser als eine abgewiesene Eiche. */
+  try{if(skinFraction(img)>=0.55&&greenFraction(img)<0.10)return true;}catch(e){}
   return false;
 }
 /* Versucht, ein englisches MobileNet-Label auf den lokalen Katalog abzubilden (grobe Stichwort-Suche). */
@@ -837,15 +903,16 @@ function matchCatalog(label){
   }
   return null;
 }
-async function ondeviceIdentify(dataUrl){
-  const net=await ensureMobilenet();
-  const img=await dataUrlToImg(dataUrl);
+/* pre = bereits im Tuersteher (kingdomGate) berechnete Zwischenergebnisse
+   {img, preds, faceChecked}. Ohne pre laeuft alles wie bisher. */
+async function ondeviceIdentify(dataUrl,pre){
+  const img=(pre&&pre.img)||await dataUrlToImg(dataUrl);
   /* 1) Harte Sperre: erkennt der Browser ein Gesicht, ist es (fast) sicher ein Mensch. */
-  if(await containsFace(img)){
+  if(!(pre&&pre.faceChecked)&&await containsFace(img)){
     return [{reject:true,reason:'face',de:'Das sieht nach einem Menschen aus 🙂',
       hint:'BIOGLOW bestimmt Pflanzen, Tiere und Pilze – bitte fotografiere ein Lebewesen (Blatt, Blüte, Insekt …).'}];
   }
-  const preds=await net.classify(img,5);
+  const preds=(pre&&pre.preds)||await (await ensureMobilenet()).classify(img,5);
   const mapped=(preds||[]).map((p)=>{
     const label=(p.className||'').split(',')[0].trim();
     const rawKey=(p.className||'').toLowerCase().replace(/[ ,]/g,'_');
@@ -879,8 +946,7 @@ const AI_REGISTRY=[
  {id:'ondevice',kind:'image',name:'MobileNet',version:'v2.1',offline:true,experimental:false,capabilities:['species-identification'],handler:'ondeviceIdentify'},
  {id:'inat',kind:'cloud',name:'iNaturalist',version:'v1',offline:false,experimental:false,capabilities:['species-identification','plant-identification'],handler:'inatSearch'},
  {id:'plantnet',kind:'image',name:'Pl@ntNet',version:'v2',offline:false,experimental:false,capabilities:['plant-identification'],handler:'plantnetIdentify'},
- {id:'kindwise',kind:'cloud',name:'Kindwise',version:'v1',offline:false,experimental:false,capabilities:['plant-identification','species-identification'],handler:null},
- {id:'birdnet',kind:'audio',name:'BirdNET',version:'endpoint',offline:false,experimental:true,capabilities:['bird-song'],handler:null},
+ {id:'birdnet',kind:'audio',name:'BirdNET',version:'endpoint',offline:false,experimental:true,capabilities:['bird-song'],handler:'birdRecordFlow'},
  {id:'gemma',kind:'llm',name:'Gemma',version:'3n',offline:true,experimental:true,capabilities:['explanation'],handler:'gemmaAsk'},
  {id:'habitat',kind:'habitat',name:'Habitat-Regeln',version:'shannon-1.0',offline:true,experimental:false,capabilities:['habitat-scoring'],handler:'score'}
 ];
@@ -906,12 +972,16 @@ function healthCheck(){
   add('TensorFlow.js',(typeof window!=='undefined'&&window.tf)?'ok':'warn','CDN, lädt bei Bedarf');
   add('Gemma (WebGPU)',(typeof gemmaSupported==='function'&&gemmaSupported())?(S.gemmaUrl?'ok':'warn'):'off',(typeof gemmaSupported==='function'&&gemmaSupported())?(S.gemmaUrl?'Modell hinterlegt':'keine Modell-URL'):'kein WebGPU');
   add('BirdNET-Endpoint',S.keys&&S.keys.birdnet?'ok':'off','optional');
-  add('Pl@ntNet-Schlüssel',plantnetKey()?'ok':'off','optional');
+  add('Pl@ntNet-Schlüssel',plantnetKey()?(_pnQuota!=null&&_pnQuota<20?'warn':'ok'):'off',
+      plantnetKey()?(_pnQuota!=null?_pnQuota+' Bestimmungen heute übrig':'Kontingent noch unbekannt'):'optional');
+  add('Standort-Filter (Ort & Saison)',S.geoPrior?(_priorLast&&_priorLast.ok?'ok':'warn'):'off',
+      S.geoPrior?(_priorLast&&_priorLast.ok?_priorLast.n+' Arten in der Umgebung bekannt':'noch nicht geladen'):'in Einstellungen aus');
   add('Internet',(typeof navigator!=='undefined'&&navigator.onLine)?'ok':'warn');
   add('Kamera',(typeof navigator!=='undefined'&&navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)?'ok':'off');
   add('Mikrofon',(typeof navigator!=='undefined'&&navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)?'ok':'off');
   add('GPS',(typeof navigator!=='undefined'&&navigator.geolocation)?(S.useGps?'ok':'warn'):'off',S.useGps?'':'in Einstellungen aus');
   add('IndexedDB',(typeof window!=='undefined'&&window.indexedDB)?'ok':'off');
+  add('KI offline verfügbar',_aiCacheN>0?'ok':'warn',_aiCacheN>0?_aiCacheN+' Dateien gespeichert':'Profil → „KI für offline vorbereiten"');
   add('Cache/Service-Worker',(typeof navigator!=='undefined'&&navigator.serviceWorker&&typeof caches!=='undefined')?'ok':'warn');
   return out;
 }
@@ -928,8 +998,29 @@ function openAiDebug(){
     +'<div class="mini muted" style="margin-top:6px">Gerät: '+device+' · Fähigkeiten: '+((meta.capabilities||[]).join(', ')||'—')+'</div></div>';
   const hc=healthCheck();
   html+='<div class="sec-title"><h2>Health-Check</h2></div><div class="card">'+hc.map(function(h){return '<div class="check-line"><span class="ci">'+_hcDot(h.s)+'</span><span>'+esc(h.l)+(h.note?' <span class="muted">('+esc(h.note)+')</span>':'')+'</span></div>';}).join('')+'</div>';
+  const hs=aiHitStats();
+  html+='<div class="sec-title"><h2>Trefferquote (eigene Messung)</h2></div><div class="card">';
+  if(!hs.alle.n){
+    html+='<div class="mini muted">Noch keine bestätigten Funde. Die App misst ab jetzt selbst mit, wie oft der <b>erste</b> Vorschlag der richtige war.</div>';
+  }else{
+    html+='<div class="stat-row"><div class="stat"><div class="v">'+hs.alle.top1+' %</div><div class="l">Top-1</div></div>'
+      +'<div class="stat"><div class="v">'+hs.alle.top3+' %</div><div class="l">Top-3</div></div>'
+      +'<div class="stat"><div class="v">'+hs.alle.n+'</div><div class="l">Funde</div></div></div>';
+    if(hs.mit.n&&hs.ohne.n){
+      html+='<div class="mini" style="margin-top:8px;line-height:1.9">Mit Standort-Filter: <b>'+hs.mit.top1+' %</b> ('+hs.mit.n+' Funde)<br>'
+        +'Ohne Standort-Filter: <b>'+hs.ohne.top1+' %</b> ('+hs.ohne.n+' Funde)</div>';
+    }else{
+      html+='<div class="mini muted" style="margin-top:8px">Für den A/B-Vergleich den Standort-Filter in den Einstellungen einmal ausschalten und ~30 Fotos machen, dann wieder ein.</div>';
+    }
+  }
+  html+='</div>';
   html+='<div class="row" style="justify-content:space-between;align-items:center;margin:12px 0 6px"><b>Entwicklermodus</b><button class="btn btn-sm" style="background:'+(dev?'var(--em-d)':'var(--s200)')+';color:'+(dev?'#fff':'var(--s600)')+'" onclick="toggleDev()">'+(dev?'an':'aus')+'</button></div>';
   if(dev){
+    const _an=window._analysis||{};
+    html+='<div class="sec-title"><h2>Letztes Foto (zum Justieren)</h2></div>'
+      +'<div class="card mini" style="line-height:1.9">Schärfe: <b>'+(_an.sharp!=null?_an.sharp:'—')+'</b> '
+      +'<span class="muted">(unscharf unter '+SHARP_MIN+', kein Motiv unter '+SHARP_EMPTY+')</span><br>'
+      +'Helligkeit: <b>'+(_an.bright!=null?_an.bright+' %':'—')+'</b> · Grün-Index: <b>'+(_an.green!=null?_an.green:'—')+'</b></div>';
     html+='<div class="sec-title"><h2>Provider-Registry</h2></div>';
     html+=AI_REGISTRY.map(function(p){return '<div class="obs"><div style="flex:1"><b>'+esc(p.name)+'</b> <span class="mini muted">'+esc(p.version)+'</span><div class="mini muted">'+esc(p.kind)+' · '+(p.offline?'offline':'online')+(p.experimental?' · 🧪':'')+' · '+esc((p.capabilities||[]).join(', '))+'</div></div>'+(_aiLast[p.id]?'<span class="chip chip-em">'+_aiLast[p.id].durationMs+' ms</span>':'')+'</div>';}).join('');
     html+='<div class="sec-title"><h2>Inferenz-Log</h2></div>';
@@ -947,48 +1038,124 @@ const AUTO_PLANT_THRESHOLD=0.30;
 /* 🚧 Türsteher: erkennt VOR der Artbestimmung, ob das Foto ein Mensch oder ein klarer
    Gegenstand (Tisch, Stuhl, Technik …) ist. Nutzt Browser-Gesichtserkennung + On-Device-Labels.
    Wichtig: nur bei KLAREM Nicht-Lebewesen ablehnen (sonst würden echte Pflanzen fälschlich rausfliegen). */
+/* Gibt {v,img,preds} zurueck. Bild und Vorhersagen werden weitergereicht, damit
+   ondeviceIdentify() sie nicht ein zweites Mal berechnen muss (~1 s pro Scan). */
 async function kingdomGate(dataUrl){
+  const out={v:'ok',img:null,preds:null};
   try{
     const img=await dataUrlToImg(dataUrl);
-    if(await containsFace(img))return 'person';
+    out.img=img;
+    if(await containsFace(img)){out.v='person';return out;}
     const net=await ensureMobilenet();
     const preds=await net.classify(img,5)||[];
+    out.preds=preds;
     const top=preds[0];
     if(top){
       const label=(top.className||'').toLowerCase().replace(/[ ,]/g,'_');
       const p=top.probability||0;
       // Klarer Gegenstand mit hoher Sicherheit → ablehnen. Zusätzlich: keines der Top-Labels sieht nach Natur aus.
       const anyNature=preds.some(x=>NATURE_RE.test((x.className||'').toLowerCase()));
-      if(p>=0.35&&NONNATURE_RE.test(label)&&!anyNature)return 'object';
+      if(p>=0.35&&NONNATURE_RE.test(label)&&!anyNature){out.v='object';return out;}
     }
   }catch(e){}
-  return 'ok';
+  return out;
 }
 let _autoUsed='';
 async function autoIdentify(dataUrl){
-  const gate=await kingdomGate(dataUrl);
-  if(gate==='person'){_autoUsed='Auto';return [{reject:true,reason:'face',de:'Das sieht nach einem Menschen aus 🙂',hint:'BIOGLOW bestimmt Pflanzen, Tiere und Pilze – bitte fotografiere ein Lebewesen (Blatt, Blüte, Insekt …).'}];}
-  if(gate==='object'){_autoUsed='Auto';return [{reject:true,reason:'nonnature',de:'Kein Lebewesen erkannt',hint:'Das sieht nach einem Gegenstand aus (z. B. Möbel/Technik). Bitte eine Pflanze, ein Tier oder einen Pilz fotografieren.'}];}
+  // 1) Pl@ntNet ZUERST: echte Pflanzen (das, was eine Klasse meist fotografiert) sollen sofort
+  //    durchkommen und NIE vom Personen-/Objekt-Türsteher abgewiesen werden (schützt z. B. formatfüllende Blüten).
   const canPn=online()&&!!plantnetKey();
   let pn=null;
   if(canPn){try{pn=await plantnetIdentify(dataUrl);}catch(e){}}
   const pnTop=(pn&&pn[0]&&typeof pn[0].conf==='number')?pn[0].conf:0;
-  if(pn&&pn.length&&pnTop>=AUTO_PLANT_THRESHOLD){_autoUsed='Auto → Pl@ntNet 🌿';return pn;}   // klar Pflanze → fertig (weniger Falsch-„Pflanze" bei Tieren)
-  let od=null;try{od=await ondeviceIdentify(dataUrl);}catch(e){}                    // sonst On-Device (Tier/unsicher)
+  if(pn&&pn.length&&pnTop>=AUTO_PLANT_THRESHOLD){_autoUsed='Auto → Pl@ntNet 🌿';return pn;}   // klar Pflanze → fertig
+  // 2) Keine klare Pflanze → jetzt erst der Türsteher (Mensch/Gegenstand?).
+  const gate=await kingdomGate(dataUrl);
+  if(gate.v==='person'){_autoUsed='Auto';return [{reject:true,reason:'face',de:'Das sieht nach einem Menschen aus 🙂',hint:'BIOGLOW bestimmt Pflanzen, Tiere und Pilze – bitte fotografiere ein Lebewesen (Blatt, Blüte, Insekt …).'}];}
+  if(gate.v==='object'){_autoUsed='Auto';return [{reject:true,reason:'nonnature',de:'Kein Lebewesen erkannt',hint:'Das sieht nach einem Gegenstand aus (z. B. Möbel/Technik). Bitte eine Pflanze, ein Tier oder einen Pilz fotografieren.'}];}
+  // 3) Weder klare Pflanze noch klar Mensch/Objekt → beste vorhandene Vermutung zeigen (motivierend statt Sackgasse).
+  let od=null;try{od=await ondeviceIdentify(dataUrl,{img:gate.img,preds:gate.preds,faceChecked:true});}catch(e){}  // On-Device (Tier/unsicher)
   const odReject=od&&od[0]&&od[0].reject;
   const odTop=(od&&!odReject&&od[0]&&typeof od[0].conf==='number')?od[0].conf:0;
-  if(od&&!odReject&&od.length&&odTop>=pnTop){_autoUsed='Auto → On-Device 📱';return od;}
-  if(pn&&pn.length){_autoUsed='Auto → Pl@ntNet 🌿';return pn;}                       // schwache Pflanze besser als nichts
-  if(od&&od.length)return od;                                                        // z. B. Ablehnung (Mensch/kein Lebewesen)
+  if(pn&&pn.length&&pnTop>=odTop){_autoUsed='Auto → Pl@ntNet 🌿';return pn;}          // schwache Pflanze bevorzugen (Klasse fotografiert meist Pflanzen)
+  if(od&&!odReject&&od.length){_autoUsed='Auto → On-Device 📱';return od;}            // grobe Tier-Vermutung
+  if(pn&&pn.length){_autoUsed='Auto → Pl@ntNet 🌿';return pn;}
   try{const d=await demoIdentifyLocal(dataUrl);if(d&&d.cands&&d.cands.length){_autoUsed='Auto (offline · Vorschläge)';return d.cands;}}catch(e){} // Offline-Rückfall
   return [{reject:true,reason:'nonnature',de:'Kein Lebewesen sicher erkannt',hint:'Bitte näher heran, scharf stellen und erneut versuchen.'}];
 }
+/* ================= Standort- und Saison-Filter (Massnahme 1) =================
+   Eine Art, die hier und in diesem Monat schon gemeldet wurde, ist wahrscheinlicher
+   als eine, die es in der Region gar nicht gibt. Genau so arbeiten professionelle
+   Bestimmungssysteme. Datenquelle ist iNaturalist (species_counts) - dieselbe, die
+   die Oeko-Simulation schon nutzt.
+   Wichtig: Nicht gemeldete Arten werden NICHT ausgeschlossen, sondern nur klein
+   gewichtet. Echte Erstfunde bleiben dadurch moeglich. */
+const PRIOR_UNSEEN=0.05;   /* Art in der Region nie gemeldet */
+const PRIOR_REGION=0.55;   /* in der Region gemeldet, aber nicht in diesem Monat */
+const PRIOR_SEASON=1.00;   /* hier UND in diesem Monat gemeldet */
+let _priorCache={};
+try{_priorCache=JSON.parse(localStorage.getItem('bioglow_prior')||'{}');}catch(e){_priorCache={};}
+let _priorLast=null,_geoUsed=false;
+function _priorKey(lat,lng,m){return (Math.round(lat*20)/20)+','+(Math.round(lng*20)/20)+',m'+m;}
+async function _countsAt(lat,lng,month){
+  let u='https://api.inaturalist.org/v1/observations/species_counts?lat='+lat+'&lng='+lng
+       +'&radius=30&per_page=200&locale='+(S.lang||'de')+'&hrank=species&verifiable=true';
+  if(month)u+='&month='+month;
+  const r=await fetch(u);if(!r.ok)throw new Error('iNat '+r.status);
+  const j=await r.json();const out={};
+  (j.results||[]).forEach(function(x){const t=x.taxon||{};if(t.name)out[String(t.name).toLowerCase()]=x.count||1;});
+  return out;
+}
+/* {season,region} oder null (offline, kein GPS, Filter aus). Ergebnis haelt 7 Tage. */
+async function regionPrior(){
+  if(!S.geoPrior||!S.useGps||!online())return null;
+  let p=null;try{p=await getPositionCached();}catch(e){return null;}
+  const m=new Date().getMonth()+1,key=_priorKey(p.lat,p.lng,m),now=Date.now();
+  const hit=_priorCache[key];
+  if(hit&&(now-hit.at)<7*24*3600e3){_priorLast={ok:true,n:Object.keys(hit.d.region||{}).length,cached:true};return hit.d;}
+  try{
+    const season=await _countsAt(p.lat,p.lng,m);
+    const region=await _countsAt(p.lat,p.lng,0);
+    const d={season:season,region:region};
+    _priorCache[key]={at:now,d:d};
+    try{localStorage.setItem('bioglow_prior',JSON.stringify(_priorCache));}catch(e){}
+    _priorLast={ok:true,n:Object.keys(region).length,cached:false};
+    return d;
+  }catch(e){_priorLast={ok:false,n:0};return hit?hit.d:null;}
+}
+/* Sortiert die Kandidaten um und markiert, was in der Naehe schon gemeldet ist. */
+function applyRegionPrior(cands,pr){
+  if(!pr||!cands||cands.length<2)return cands;
+  const has=function(o,sci){return !!(sci&&o&&Object.prototype.hasOwnProperty.call(o,String(sci).toLowerCase()));};
+  cands.forEach(function(c){
+    let pri=PRIOR_UNSEEN,tag='';
+    if(has(pr.season,c.sci)){pri=PRIOR_SEASON;tag='season';}
+    else if(has(pr.region,c.sci)){pri=PRIOR_REGION;tag='region';}
+    c.nearby=tag;
+    c._rank=(typeof c.conf==='number'?c.conf:0.25)*pri;
+  });
+  cands.sort(function(a,b){return (b._rank||0)-(a._rank||0);});
+  return cands;
+}
+/* Aussen-Huelle um die eigentliche Bestimmung. Bei der Namenssuche (iNat) bleibt
+   die Reihenfolge unangetastet - dort hat der Mensch den Namen ja selbst getippt. */
 async function identify(dataUrl,queryText){
+  _geoUsed=false;
+  const res=await identifyRaw(dataUrl,queryText);
+  try{
+    if(res&&res.cands&&res.cands.length>1&&!res.cands[0].reject&&S.provider!=='inat'){
+      const pr=await regionPrior();
+      if(pr){applyRegionPrior(res.cands,pr);_geoUsed=true;}
+    }
+  }catch(e){}
+  return res;
+}
+async function identifyRaw(dataUrl,queryText){
   const p=S.provider;
   try{
     if(p==='auto'){
       if(!_mnet&&!(online()&&plantnetKey()))toast('KI wird vorbereitet (beim 1. Mal ~16 MB) …');
-      _autoUsed='Auto';const cands=await autoIdentify(dataUrl);
+      _autoUsed='Auto';const cands=await withMetrics('auto',autoIdentify)(dataUrl);
       return {provider:_autoUsed||'Auto',cands:cands};
     }
     if(p==='ondevice'){
@@ -1244,6 +1411,9 @@ function screenProfile(){
       <label class="fld">Anbieter</label>
       <select id="provSel" onchange="onProvChange()">${Object.keys(PROVIDERS).map(k=>`<option value="${k}" ${S.provider===k?'selected':''}>${esc(PROVIDERS[k].label)}</option>`).join('')}</select>
       <div id="keyBox">${prov.needsKey?keyField(prov.needsKey):''}</div>
+      <div style="border-top:1px solid var(--s100);margin:12px 0 10px"></div>
+      <div class="mini muted">Vor einem Ausflug oder dem Demo-Tag einmal drücken: Danach erkennt die App Arten auch ganz ohne Empfang.</div>
+      <button class="btn btn-ghost btn-sm" style="width:100%;margin-top:8px" onclick="prepareOffline()">📦 KI für offline vorbereiten${_aiCacheN?' ✓':''}</button>
     </div>
 
     <div class="sec-title"><h2>Klasse & Cloud</h2></div>
@@ -1275,6 +1445,7 @@ function screenProfile(){
       ${tglRow('Farbenblind-Modus','Kontraststarke Farben (Blau/Orange statt Grün/Rot)',S.cb,'toggleCb()')}
       ${tglRow('Leichte Sprache','Einfache Erklärungen + Vorlesen-Hilfe',S.easy,'toggleEasy()')}
       ${tglRow('Standort verwenden','GPS für Karte, Wetter &amp; Prüfung',S.useGps,'toggleGps()')}
+      ${tglRow('Standort-Filter für die KI','Vorschläge nach Ort &amp; Jahreszeit sortieren',S.geoPrior,'toggleGeoPrior()')}
       ${tglRow('Standorte immer unscharf','Schützt ALLE Fundorte (nicht nur seltene Arten)',S.fuzzAll,'toggleFuzz()')}
       ${tglRow('Neue Funde öffentlich','Standard fürs Teilen in der Cloud',S.publicDefault,'togglePublic()')}
       <label class="fld">Eltern-/Lehrer-PIN (Schul-Modus sperren)</label>
@@ -1315,8 +1486,8 @@ function screenProfile(){
   </div>`;
 }
 function keyField(which){if(which==='gemma')return gemmaField();
-  const label=which==='plantnet'?'Pl@ntNet API-Schlüssel':'Kindwise API-Schlüssel';
-  const help=which==='plantnet'?'Kostenlos unter my.plantnet.org → „Settings" → API-Key':'Kostenloses Test-Guthaben unter kindwise.com';
+  const label=which==='plantnet'?'Pl@ntNet API-Schlüssel':'API-Schlüssel';
+  const help=which==='plantnet'?'Kostenlos unter my.plantnet.org → „Settings" → API-Key':'Schlüssel des jeweiligen Anbieters';
   return `<label class="fld">${label}</label><input type="password" id="keyInput" value="${esc(S.keys[which]||'')}" placeholder="hier einfügen …" oninput="onKeyInput('${which}',this.value)"><div class="mini muted" style="margin-top:5px">${help}</div>`;}
 
 /* ===== GEMMA – On-Device Erklär-KI (MediaPipe LLM Inference, WebGPU) =====
@@ -1392,7 +1563,7 @@ function onProvChange(){S.provider=$('provSel').value;saveSettings();const p=PRO
 function openProviderPick(){
   openModal('<h3>KI-Quelle wählen</h3><div class="mini muted" style="margin:4px 0 10px">Womit sollen Arten bestimmt werden? Demo &amp; iNaturalist funktionieren ohne Schlüssel.</div>'
     +Object.keys(PROVIDERS).map(k=>'<button class="q-opt" onclick="pickProvider(\''+k+'\')"><span style="flex:1"><b>'+esc(PROVIDERS[k].label)+'</b><div class="mini" style="margin-top:3px">'+provBadges(k)+'</div></span>'+(S.provider===k?'<span class="chip chip-em">aktiv</span>':'')+'</button>').join('')
-    +'<div class="mini muted" style="margin-top:6px">Schlüssel/Endpoints für Pl@ntNet/Kindwise/BirdNET unter Profil → KI-Quelle.</div>'
+    +'<div class="mini muted" style="margin-top:6px">Schlüssel/Endpoints für Pl@ntNet und BirdNET unter Profil → KI-Quelle.</div>'
     +'<button class="btn btn-ghost" style="margin-top:8px" onclick="closeModal()">Schließen</button>');
 }
 function pickProvider(k){S.provider=k;saveSettings();closeModal();render();toast('KI-Quelle: '+PROVIDERS[k].label);}
@@ -1411,6 +1582,9 @@ function onKeyInput(which,val){S.keys[which]=val.trim();saveSettings();}
 
 /* ============================ KAMERA ============================ */
 let camStream=null,camPhoto=null;
+/* Spur, ImageCapture-Objekt und Taschenlampen-Zustand der Live-Kamera. */
+let _camTrack=null,_camCapture=null,_camTorch=false;
+function blobToDataUrl(b){return new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.onerror=rej;r.readAsDataURL(b);});}
 /* Standardweg jetzt: die NATIVE Handy-Kamera (bester Autofokus/Makro + echte EXIF-Daten fürs Anti-Cheat).
    Löst die typischen Web-Kamera-Probleme (getUserMedia-Video hat oft keinen Makro/Fokus). Live-Vorschau optional. */
 function openCamera(missionId){
@@ -1426,48 +1600,167 @@ function openCamera(missionId){
       <div style="font-weight:800;font-size:17px;margin-bottom:6px">Foto aufnehmen</div>
       <div class="mini" style="opacity:.85;max-width:290px;margin-bottom:18px">Nah heran, scharf stellen (Autofokus/Makro), gutes Licht. Bei Pflanzen die <b>Blüte</b> oder ein <b>Blatt</b> formatfüllend.</div>
       <button class="btn btn-primary" style="max-width:270px" onclick="pickCamera()">📷 Handy-Kamera öffnen</button>
+      <button class="btn btn-ghost" style="max-width:270px;margin-top:10px;color:#fff;border:1px solid rgba(255,255,255,.35)" onclick="openMultiScan()">🌿 Pflanze genau bestimmen (mehrere Merkmale)</button>
       <button class="btn btn-ghost" style="max-width:270px;margin-top:10px;color:#fff;border:1px solid rgba(255,255,255,.35)" onclick="pickGallery()">🖼️ Aus Galerie wählen</button>
       <button class="btn btn-ghost" style="max-width:270px;margin-top:10px;color:#fff;opacity:.85" onclick="startLive()">🎥 Live-Vorschau (im Browser)</button>
     </div>
     <input id="fileCam" type="file" accept="image/*" capture="environment" style="display:none" onchange="onFile(event,'camera')">
     <input id="fileGal" type="file" accept="image/*" style="display:none" onchange="onFile(event,'upload')">`;
 }
+/* ============ Mehrbild-Bestimmung fuer Pflanzen (Massnahme 6) ============
+   Pl@ntNet nimmt bis zu 5 Bilder desselben Individuums an, jedes mit Organ-Angabe.
+   Das ist bei Pflanzen der groesste Einzelgewinn - und der Bildschirm bringt den
+   Kindern nebenbei bei, worauf man beim Bestimmen ueberhaupt achtet. */
+const ORGANS=[
+  {k:'flower',de:'Blüte',emo:'🌸',tip:'Eine einzelne Blüte formatfüllend, von vorn.'},
+  {k:'leaf',de:'Blatt',emo:'🍃',tip:'Ein ganzes Blatt flach von oben, der Rand gut sichtbar.'},
+  {k:'fruit',de:'Frucht',emo:'🫐',tip:'Frucht oder Samenstand, ganz nah heran.'},
+  {k:'bark',de:'Rinde / Stängel',emo:'🪵',tip:'Rinde oder Stängel formatfüllend.'}
+];
+let _multi=null;
+function openMultiScan(){
+  if(!plantnetKey()){toast('Dafür braucht die App den kostenlosen Pl@ntNet-Schlüssel (Profil → KI-Quelle).');return;}
+  _multi={shots:[]};window._multiOrgan=null;renderMultiScan();
+}
+function renderMultiScan(){
+  if(!_multi)return;
+  const done=_multi.shots.map(s=>s.organ),n=_multi.shots.length;
+  openModal(`<h3>🌿 Pflanze genau bestimmen</h3>`
+    +`<div class="mini muted" style="margin:4px 0 12px">Je mehr Merkmale, desto sicherer die Bestimmung. Zwei reichen schon, vier sind am besten.</div>`
+    +ORGANS.map(o=>`<button class="q-opt" onclick="multiShot('${o.k}')"><span style="font-size:22px">${o.emo}</span><span style="flex:1"><b>${o.de}</b><div class="mini muted">${esc(o.tip)}</div></span><span class="chip ${done.indexOf(o.k)>=0?'chip-em':''}">${done.indexOf(o.k)>=0?'✓':'+'}</span></button>`).join('')
+    +`<button class="btn btn-primary" style="margin-top:10px" onclick="multiIdentify()" ${n?'':'disabled'}>Bestimmen (${n} Foto${n===1?'':'s'})</button>`
+    +`<button class="btn btn-ghost" style="margin-top:8px" onclick="cancelMultiScan()">Abbrechen</button>`);
+}
+function cancelMultiScan(){_multi=null;window._multiOrgan=null;closeModal();}
+function multiShot(organ){window._multiOrgan=organ;closeModal();openCamera();}
+async function multiIdentify(){
+  if(!_multi||!_multi.shots.length)return;
+  const shots=_multi.shots.slice();_multi=null;
+  camPhoto=shots[0].url;                       /* Beweisfoto = das erste Merkmal */
+  window._photoSource='camera';window._exif=null;window._isAudio=false;
+  window._analysis=await analyzePhoto(camPhoto);
+  openModal(`<div style="text-align:center"><div class="spinner"></div><div class="muted mini">Pl@ntNet vergleicht ${shots.length} Merkmale …</div></div>`);
+  let cands=null;
+  try{cands=await withMetrics('plantnet',plantnetIdentify)(camPhoto,shots);}
+  catch(e){toast('Pl@ntNet: '+(e.message||e));}
+  if(!cands||!cands.length){
+    return showCandidates('Pl@ntNet',[{reject:true,de:'Keine Pflanze erkannt',
+      hint:'Bitte Blüte oder Blatt formatfüllend und scharf fotografieren.'}]);
+  }
+  _geoUsed=false;
+  try{const pr=await regionPrior();if(pr){applyRegionPrior(cands,pr);_geoUsed=true;}}catch(e){}
+  showCandidates('Pl@ntNet · '+shots.length+' Merkmale',cands);
+}
 function pickCamera(){const el=$('fileCam');if(el)el.click();}
 function pickGallery(){const el=$('fileGal');if(el)el.click();}
 function startLive(){
   const cam=$('cam');
   cam.innerHTML=`<div class="top"><b style="color:#fff">${window._camLabel||'Foto'}</b><button class="cbtn" onclick="cancelCamera()">✕</button></div>
-    <div class="view"><video id="vid" playsinline muted></video><div class="corners"><i style="top:16px;left:16px;border-right:0;border-bottom:0;border-radius:8px 0 0 0"></i><i style="top:16px;right:16px;border-left:0;border-bottom:0;border-radius:0 8px 0 0"></i><i style="bottom:16px;left:16px;border-right:0;border-top:0;border-radius:0 0 0 8px"></i><i style="bottom:16px;right:16px;border-left:0;border-top:0;border-radius:0 0 8px 0"></i></div></div>
-    <div class="controls"><button class="cbtn" onclick="pickCamera()" title="Handy-Kamera (schärfer)">📷</button><button class="shutter" id="shot" onclick="shoot()">⚪</button><button class="cbtn" onclick="startCam()" title="Neu">🔄</button></div>`;
+    <div class="view"><video id="vid" playsinline muted onclick="camFocusAt(event)" title="Antippen zum Scharfstellen"></video><div class="corners"><i style="top:16px;left:16px;border-right:0;border-bottom:0;border-radius:8px 0 0 0"></i><i style="top:16px;right:16px;border-left:0;border-bottom:0;border-radius:0 8px 0 0"></i><i style="bottom:16px;left:16px;border-right:0;border-top:0;border-radius:0 0 0 8px"></i><i style="bottom:16px;right:16px;border-left:0;border-top:0;border-radius:0 0 8px 0"></i></div></div>
+    <div class="controls"><button class="cbtn" id="torchBtn" style="display:none" onclick="toggleTorch()" title="Taschenlampe">💡</button><button class="cbtn" onclick="pickCamera()" title="Handy-Kamera (schärfer)">📷</button><button class="shutter" id="shot" onclick="shoot()">⚪</button><button class="cbtn" onclick="startCam()" title="Neu">🔄</button></div>`;
   startCam();
 }
 async function startCam(){
-  try{camStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1920}},audio:false});
-    const v=$('vid');if(v){v.srcObject=camStream;await v.play().catch(()=>{});}}
+  try{
+    camStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:2560},height:{ideal:1920}},audio:false});
+    const v=$('vid');if(v){v.srcObject=camStream;await v.play().catch(()=>{});}
+    _camTrack=camStream.getVideoTracks()[0]||null;_camCapture=null;_camTorch=false;
+    /* ImageCapture liefert das Foto in voller Sensoraufloesung statt als Videobild. */
+    if(_camTrack&&window.ImageCapture){try{_camCapture=new window.ImageCapture(_camTrack);}catch(e){_camCapture=null;}}
+    if(_camTrack&&_camTrack.getCapabilities){
+      try{
+        const cap=_camTrack.getCapabilities()||{};
+        if(cap.focusMode&&cap.focusMode.indexOf('continuous')>=0)
+          await _camTrack.applyConstraints({advanced:[{focusMode:'continuous'}]});
+        /* Taschenlampe nur zeigen, wenn das Geraet sie kann (Makro im Schatten). */
+        const tb=$('torchBtn');if(tb)tb.style.display=cap.torch?'':'none';
+      }catch(e){}
+    }
+  }
   catch(e){toast('Live-Kamera nicht verfügbar – nutze die Handy-Kamera.');pickCamera();}
 }
-function stopCam(){if(camStream){camStream.getTracks().forEach(t=>t.stop());camStream=null;}}
+/* Antippen stellt auf das Motiv scharf statt auf den Hintergrund. */
+async function camFocusAt(ev){
+  if(!_camTrack||!_camTrack.getCapabilities)return;
+  try{
+    const cap=_camTrack.getCapabilities()||{},v=$('vid');if(!v)return;
+    const r=v.getBoundingClientRect();
+    const x=clamp((ev.clientX-r.left)/r.width,0,1),y=clamp((ev.clientY-r.top)/r.height,0,1);
+    const adv={};
+    if(cap.pointsOfInterest)adv.pointsOfInterest=[{x:x,y:y}];
+    if(cap.focusMode&&cap.focusMode.indexOf('single-shot')>=0)adv.focusMode='single-shot';
+    if(Object.keys(adv).length){await _camTrack.applyConstraints({advanced:[adv]});toast('Scharf gestellt 🎯');}
+  }catch(e){}
+}
+async function toggleTorch(){
+  if(!_camTrack)return;
+  try{
+    _camTorch=!_camTorch;
+    await _camTrack.applyConstraints({advanced:[{torch:_camTorch}]});
+    const b=$('torchBtn');if(b)b.textContent=_camTorch?'🔦':'💡';
+  }catch(e){toast('Taschenlampe geht auf diesem Gerät nicht.');}
+}
+function stopCam(){
+  if(_camTrack&&_camTorch){try{_camTrack.applyConstraints({advanced:[{torch:false}]});}catch(e){}}
+  if(camStream){camStream.getTracks().forEach(t=>t.stop());camStream=null;}
+  _camTrack=null;_camCapture=null;_camTorch=false;
+}
 function pickFile(){pickCamera();} /* Kompatibilität */
 /* Original nur zur Analyse; für Speicher/Datenschutz auf sinnvolle Größe verkleinern (EXIF vorher gelesen). */
 function downscaleDataUrl(url,max,q){return new Promise(function(res){const i=new Image();i.onload=function(){let w=i.width,h=i.height;const s=Math.min(1,(max||1600)/Math.max(w,h));if(s<1){w=Math.round(w*s);h=Math.round(h*s);}const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(i,0,0,w,h);try{res(c.toDataURL('image/jpeg',q||0.82));}catch(e){res(url);}};i.onerror=function(){res(url);};i.src=url;});}
-async function onFile(ev,src){const f=ev.target.files&&ev.target.files[0];if(!f)return;window._photoSource=(src==='camera')?'camera':'upload';try{window._exif=await readExif(f);}catch(e){window._exif={hasExif:false};}const full=await fileToDataUrl(f);camPhoto=await downscaleDataUrl(full,1600,0.82);stopCam();afterPhoto();}
-function shoot(){const v=$('vid');if(!v||!v.videoWidth){toast('Kamera noch nicht bereit …');return;}camPhoto=compress(v);window._photoSource='camera';window._exif=null;stopCam();afterPhoto();}
+async function onFile(ev,src){const f=ev.target.files&&ev.target.files[0];if(!f)return;window._photoSource=(src==='camera')?'camera':'upload';try{window._exif=await readExif(f);}catch(e){window._exif={hasExif:false};}const full=await fileToDataUrl(f);camPhoto=await downscaleDataUrl(full,1600,0.85);stopCam();afterPhoto();}
+/* Wo der Browser ImageCapture beherrscht, kommt EIN Foto in voller Sensoraufloesung.
+   Sonst werden drei Videobilder kurz hintereinander genommen und das schaerfste
+   behalten - bei Kinderhaenden und zappelnden Insekten hilft das mehr als jede
+   Bildstabilisierung. */
+async function shoot(){
+  const v=$('vid');if(!v||!v.videoWidth){toast('Kamera noch nicht bereit …');return;}
+  const btn=$('shot');if(btn)btn.textContent='⏳';
+  let best=null;
+  if(_camCapture){
+    try{const b=await _camCapture.takePhoto();best=await downscaleDataUrl(await blobToDataUrl(b),1600,0.85);}
+    catch(e){best=null;}
+  }
+  if(!best){
+    const shots=[];
+    for(let i=0;i<3;i++){shots.push(compress(v,1600));if(i<2)await new Promise(r=>setTimeout(r,110));}
+    let bs=-1;
+    for(let i=0;i<shots.length;i++){
+      const a=await analyzePhoto(shots[i]);const sc=(a&&a.sharp!=null)?a.sharp:0;
+      if(sc>bs){bs=sc;best=shots[i];}
+    }
+  }
+  camPhoto=best;window._photoSource='camera';window._exif=null;
+  if(btn)btn.textContent='⚪';
+  stopCam();afterPhoto();
+}
 function closeCamera(){stopCam();$('cam').classList.add('hidden');}
 function cancelCamera(){window._monitorSpot=null;window._missionId=null;window._isAudio=false;closeCamera();}
 
 /* Nach Foto: identifizieren → bestätigen → speichern */
 /* Leeres/dunkles/überstrahltes Foto ohne Motiv erkennen (z. B. „schwarzes Bild"). */
-function photoLooksEmpty(a){if(!a)return false;const dark=(a.bright!=null&&a.bright<8);const blown=(a.bright!=null&&a.bright>97);const flat=(a.sharp!=null&&a.sharp<8);return dark||blown||flat;}
+function photoLooksEmpty(a){if(!a)return false;const dark=(a.bright!=null&&a.bright<8);const blown=(a.bright!=null&&a.bright>97);const flat=(a.sharp!=null&&a.sharp<SHARP_EMPTY);return dark||blown||flat;}
 function emptyPhotoReject(){openModal('<div style="text-align:center"><div style="font-size:40px">🌑</div><h3>Kein Motiv erkennbar</h3><div class="mini muted" style="margin:8px 0 14px">Das Foto ist zu dunkel, überbelichtet oder leer. Bitte eine <b>Pflanze oder ein Tier formatfüllend und scharf</b> fotografieren.</div><button class="btn btn-em" onclick="closeModal();go(\'scan\')">📷 Neues Foto</button><button class="btn btn-ghost" style="margin-top:8px" onclick="closeModal()">Schließen</button></div>');}
+function personPhotoReject(){const mid=window._missionId;openModal('<div style="text-align:center"><div style="font-size:40px">🙂</div><h3>Das sieht nach einem Menschen aus</h3><div class="mini muted" style="margin:8px 0 14px">Bitte fotografiere <b>die Natur oder deine Aktion</b> (z. B. den gesäuberten Uferbereich oder den Müllsack) – nicht dich selbst.</div><button class="btn btn-em" onclick="closeModal();openCamera('+(mid?"'"+mid+"'":"null")+')">📷 Neues Foto</button><button class="btn btn-ghost" style="margin-top:8px" onclick="closeModal()">Schließen</button></div>');}
 async function afterPhoto(){
   closeCamera();
   window._isAudio=false;
   // Foto analysieren (Schärfe + Grün-Index).
   window._analysis=await analyzePhoto(camPhoto);
+  /* Mehrbild-Bestimmung: Foto zum passenden Merkmal legen und zurueck zur Auswahl. */
+  if(window._multiOrgan&&_multi){
+    const org=window._multiOrgan;window._multiOrgan=null;
+    if(photoLooksEmpty(window._analysis)){toast('Zu dunkel oder kein Motiv – bitte noch einmal.');return renderMultiScan();}
+    _multi.shots=_multi.shots.filter(x=>x.organ!==org);
+    _multi.shots.push({organ:org,url:camPhoto});
+    return renderMultiScan();
+  }
   // Leeres/dunkles Foto → kein Motiv → keine Erkennung, keine Punkte (Monitoring darf Flächen abbilden).
   if(!window._monitorSpot&&photoLooksEmpty(window._analysis)){return emptyPhotoReject();}
   if(window._monitorSpot){return saveMonitorShot();}
-  if(window._missionId){return saveMissionProof(window._missionId);}
+  // Missions-Beleg: hier Selfies abweisen (Kopf-Foto als „Aktion erledigt" gibt es nicht). Beim normalen
+  // Scan macht das der Türsteher in autoIdentify NACH Pl@ntNet – so werden echte Pflanzen nie vorschnell abgewiesen.
+  if(window._missionId){try{const _pimg=await dataUrlToImg(camPhoto);if(await containsFace(_pimg))return personPhotoReject();}catch(e){}return saveMissionProof(window._missionId);}
   // Foto-Coach: bei unscharfem Foto einen Tipp geben und Neuaufnahme anbieten.
   if(window._analysis&&window._analysis.blurry){return photoCoach();}
   continueScan();
@@ -1507,7 +1800,19 @@ function chooseAi(k){
   else S.provider=k;
   saveSettings();closeModal();updateModeBtn();proceedIdentify();
 }
+/* Wenn kein einzelner Artvorschlag ueberzeugt, die Vorschlaege aber alle zur selben
+   Gattung gehoeren, ist die ehrliche Antwort die Gattung - genau so arbeiten
+   Fachleute mit einem Bestimmungsschluessel. */
+function genusHint(cands){
+  const list=(cands||[]).filter(c=>!c.reject&&c.sci).slice(0,3);
+  if(list.length<2)return null;
+  if(typeof list[0].conf==='number'&&list[0].conf>=0.5)return null;
+  const g=list.map(c=>String(c.sci).trim().split(/\s+/)[0]).filter(Boolean);
+  if(g.length<2||g.some(x=>x!==g[0]))return null;
+  return g[0];
+}
 function showCandidates(provider,cands){
+  window._lastProvider=provider;
   /* Kein Lebewesen / Mensch erkannt → ehrliche Rückmeldung, KEIN Bestätigen-Button (kein Fund, keine Punkte). */
   if(!cands||!cands.length||cands[0]&&cands[0].reject){
     const r=(cands&&cands[0])||{de:'Kein Lebewesen erkannt',hint:'Bitte eine Pflanze, ein Tier oder einen Pilz fotografieren.'};
@@ -1520,10 +1825,13 @@ function showCandidates(provider,cands){
   }
   const c0=cands[0], low=(c0&&typeof c0.conf==='number'&&c0.conf<0.5);
   const coach=low?`<div class="banner" style="background:#92400e;color:#fff;margin-bottom:10px"><div class="ic">🔎</div><div class="mini"><b>Ergebnis unsicher (${Math.round(c0.conf*100)} %).</b> So wird's besser: näher rangehen, scharf stellen, gutes Licht – und bei Pflanzen ein <b>klares Merkmal</b> fotografieren (Blüte, Blatt oder Rinde). Dann neu aufnehmen.</div></div>`:'';
-  openModal(`<h3>Vorschläge · ${esc(provider)}</h3>${coach}<div class="mini muted" style="margin:4px 0 12px">Bitte bestätige die richtige Art (du entscheidest):</div>
+  const gen=genusHint(cands);
+  const genBox=gen?`<div class="banner" style="background:var(--em-soft);color:var(--em-deep);margin-bottom:10px"><div class="ic">🎯</div><div class="mini">Sicher ist: Es gehört zur Gattung <b>${esc(gen)}</b>. Welche Art genau, ist noch offen – das ist eine ehrliche Antwort und in der Biologie ganz normal. Wähle unten nur, wenn du dir sicher bist, sonst lieber ein besseres Foto machen.</div></div>`:'';
+  const geoNote=_geoUsed?`<div class="mini muted" style="margin:4px 0 0">📍 Sortiert nach Standort und Jahreszeit (iNaturalist-Meldungen im Umkreis von 30 km).</div>`:'';
+  openModal(`<h3>Vorschläge · ${esc(provider)}</h3>${coach}${genBox}<div class="mini muted" style="margin:4px 0 12px">Bitte bestätige die richtige Art (du entscheidest):${geoNote}</div>
     ${cands.map((c,i)=>`<button class="q-opt" onclick="confirmSpecies(${i})">
       ${c.photo?`<img src="${c.photo}" style="width:40px;height:40px;border-radius:8px;object-fit:cover">`:`<span style="font-size:26px">${c.emoji}</span>`}
-      <span style="flex:1"><b>${esc(c.de)}</b><div class="mini muted" style="font-style:italic">${esc(c.sci)}</div></span>
+      <span style="flex:1"><b>${esc(c.de)}</b><div class="mini muted" style="font-style:italic">${esc(c.sci)}</div>${c.nearby==='season'?`<div class="mini" style="color:var(--em)">📍 hier &amp; in diesem Monat schon beobachtet</div>`:c.nearby==='region'?`<div class="mini muted">📍 in der Region schon beobachtet</div>`:''}</span>
       ${c.conf!=null?`<span class="chip ${c.conf>=0.5?'chip-em':'chip-amb'}">${Math.round(c.conf*100)}%</span>`:''}</button>`).join('')}
     <button class="btn btn-em" style="margin-top:6px" onclick="closeModal();go('scan')">📷 Besseres Foto machen</button>
     <button class="btn btn-ghost" style="margin-top:8px" onclick="closeModal()">Abbrechen</button>`);
@@ -1542,9 +1850,33 @@ async function inatQuery(q){$('inatRes').innerHTML='<div class="spinner"></div>'
     $('inatRes').innerHTML=cands.length?cands.map((c,i)=>`<button class="q-opt" onclick="confirmSpecies(${i})">${c.photo?`<img src="${c.photo}" style="width:40px;height:40px;border-radius:8px;object-fit:cover">`:`<span style="font-size:24px">${c.emoji}</span>`}<span style="flex:1"><b>${esc(c.de)}</b><div class="mini muted" style="font-style:italic">${esc(c.sci)}</div></span></button>`).join(''):'<div class="mini muted">Nichts gefunden.</div>';
   }catch(e){$('inatRes').innerHTML='<div class="mini muted">Offline oder Fehler – bitte Demo-Anbieter nutzen.</div>';}
 }
+/* ============ Trefferquoten-Log (Massnahme 14) ============
+   Der Mensch bestaetigt bei BIOGLOW immer selbst - also laesst sich nebenbei messen,
+   wie oft die KI mit ihrem ERSTEN Vorschlag richtig lag. Nach 100 Scans habt ihr eine
+   ehrlich erhobene Trefferquote fuer die Forschungsdokumentation, ohne Zusatzaufwand.
+   Das Feld g merkt sich, ob der Standort-Filter aktiv war -> A/B-Vergleich. */
+let _aiHits=[];
+try{_aiHits=JSON.parse(localStorage.getItem('bioglow_aihits')||'[]');}catch(e){_aiHits=[];}
+function logAiHit(idx,n,provider,conf,geo){
+  _aiHits.push({t:Date.now(),i:idx,n:n,p:String(provider||'').slice(0,40),
+    c:(typeof conf==='number'?Math.round(conf*100):null),g:geo?1:0});
+  if(_aiHits.length>2000)_aiHits=_aiHits.slice(-2000);
+  try{localStorage.setItem('bioglow_aihits',JSON.stringify(_aiHits));}catch(e){}
+}
+function _hitQuote(list){
+  const k=list.length;
+  return {n:k,top1:k?Math.round(list.filter(x=>x.i===0).length/k*100):null,
+              top3:k?Math.round(list.filter(x=>x.i<3).length/k*100):null};
+}
+function aiHitStats(){
+  return {alle:_hitQuote(_aiHits),
+          mit:_hitQuote(_aiHits.filter(x=>x.g===1)),
+          ohne:_hitQuote(_aiHits.filter(x=>x.g===0))};
+}
 async function confirmSpecies(i){
   const c=window._cands[i];
   if(!c||c.reject){closeModal();toast('Bitte ein Lebewesen (Pflanze/Tier/Pilz) fotografieren.');return;}
+  logAiHit(i,(window._cands||[]).length,window._lastProvider,c.conf,_geoUsed);
   closeModal();
   openModal('<div style="text-align:center"><div class="spinner"></div><div class="muted mini">Standort & Steckbrief werden erfasst …</div></div>');
   let pos=null;try{pos=await getPosition();}catch(e){}
@@ -1586,7 +1918,7 @@ function confLabel(v){return v>=0.75?['hohes Vertrauen','var(--em)']:v>=0.5?['mi
 function qualityGrade(rec){
   const a=window._analysis||{};
   const conf=(typeof rec.conf==='number')?rec.conf:null;
-  const sharpOk=a.blurry!==true&&(a.sharp==null||a.sharp>=70);
+  const sharpOk=a.blurry!==true&&(a.sharp==null||a.sharp>=SHARP_MIN);
   const gpsOk=rec.lat!=null&&(rec.acc==null||rec.acc<=(RULES.gpsMaxAcc||60));
   const exifOk=rec.photoSource==='camera'||(rec.exif&&rec.exif.hasExif);
   const peerOk=(rec.confirms||0)>0;
@@ -2026,23 +2358,48 @@ async function areaName(lat,lng){
 }
 
 /* ============================ Foto-Analyse: Schärfe (Blur) + Grün-Index (Mini-NDVI) ============================ */
+/* Gemessen wird auf 320 px statt auf 64 px: beim starken Verkleinern verschwindet
+   genau die Information, aus der Unschaerfe besteht. Die Schaerfe wird zudem nur im
+   mittleren Bildbereich bestimmt (dort ist das Motiv; ein unscharfer Hintergrund
+   soll den Wert nicht druecken) und durch die Bildvarianz geteilt - dadurch misst
+   der Wert wirklich Schaerfe und nicht Kontrast. */
 function analyzePhoto(dataUrl){
   return new Promise(res=>{
     const img=new Image();
     img.onload=()=>{
-      const w=64,h=64,c=document.createElement('canvas');c.width=w;c.height=h;
-      const ctx=c.getContext('2d');ctx.drawImage(img,0,0,w,h);
+      const MAXD=320;
+      let w=img.naturalWidth||img.width||MAXD,h=img.naturalHeight||img.height||MAXD;
+      const sc=Math.min(1,MAXD/Math.max(w,h));
+      w=Math.max(16,Math.round(w*sc));h=Math.max(16,Math.round(h*sc));
+      const c=document.createElement('canvas');c.width=w;c.height=h;
+      const ctx=c.getContext('2d',{willReadFrequently:true});ctx.drawImage(img,0,0,w,h);
       const d=ctx.getImageData(0,0,w,h).data;
-      let g=0,rb=0;for(let i=0;i<d.length;i+=4){g+=d[i+1];rb+=(d[i]+d[i+2])/2;}
+      /* Gruen-Index und Helligkeit ueber das ganze Bild (Lebensraum-Kennwerte). */
+      let g=0,rb=0,gsum=0;const gray=new Float32Array(w*h);
+      for(let i=0,p=0;i<d.length;i+=4,p++){
+        const r=d[i],gg=d[i+1],b=d[i+2];
+        g+=gg;rb+=(r+b)/2;
+        const gl=0.299*r+0.587*gg+0.114*b;gray[p]=gl;gsum+=gl;
+      }
       const green=Math.round(clamp((g-rb)/(g+rb+1)+0.5,0,1)*100);
-      const gray=[];let gsum=0;for(let i=0;i<d.length;i+=4){const gl=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];gray.push(gl);gsum+=gl;}
-      const bright=Math.round(gsum/gray.length/255*100);
-      let sum=0,sum2=0,n=0;
-      for(let y=1;y<h-1;y++)for(let x=1;x<w-1;x++){const i=y*w+x;const lap=4*gray[i]-gray[i-1]-gray[i+1]-gray[i-w]-gray[i+w];sum+=lap;sum2+=lap*lap;n++;}
-      const varr=sum2/n-Math.pow(sum/n,2);
-      res({green:green,bright:bright,sharp:Math.round(varr),blurry:varr<70});
+      const bright=Math.round(gsum/(w*h)/255*100);
+      /* Schaerfe: Laplace-Varianz im mittleren 60-Prozent-Fenster, geteilt durch die
+         Helligkeitsvarianz desselben Fensters, mal 1000. */
+      const x0=Math.max(1,Math.round(w*0.2)),x1=Math.min(w-1,Math.round(w*0.8));
+      const y0=Math.max(1,Math.round(h*0.2)),y1=Math.min(h-1,Math.round(h*0.8));
+      let ls=0,ls2=0,vs=0,vs2=0,n=0;
+      for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++){
+        const i=y*w+x;
+        const lap=4*gray[i]-gray[i-1]-gray[i+1]-gray[i-w]-gray[i+w];
+        ls+=lap;ls2+=lap*lap;vs+=gray[i];vs2+=gray[i]*gray[i];n++;
+      }
+      if(!n){res({green:green,bright:bright,sharp:null,blurry:false});return;}
+      const lapVar=Math.max(0,ls2/n-Math.pow(ls/n,2));
+      const lumVar=Math.max(1,vs2/n-Math.pow(vs/n,2));
+      const sharp=Math.round(1000*lapVar/lumVar);
+      res({green:green,bright:bright,sharp:sharp,blurry:sharp<SHARP_MIN});
     };
-    img.onerror=()=>res({green:null,sharp:null,blurry:false});
+    img.onerror=()=>res({green:null,bright:null,sharp:null,blurry:false});
     img.src=dataUrl;
   });
 }
@@ -2883,6 +3240,8 @@ function toggleBigText(){S.bigText=!S.bigText;saveSettings();applyAppearance();r
 function toggleCb(){S.cb=!S.cb;saveSettings();applyAppearance();render();toast(S.cb?'Farbenblind-Modus an.':'Farbenblind-Modus aus.');}
 function toggleEasy(){S.easy=!S.easy;if(S.easy&&!S.bigText)S.bigText=true;saveSettings();applyAppearance();render();toast(S.easy?'Leichte Sprache an.':'Leichte Sprache aus.');}
 function toggleGps(){S.useGps=!S.useGps;saveSettings();render();toast(S.useGps?'Standort wird verwendet.':'Standort aus – Funde ohne Ort.');}
+/* Zum Messen: aus- und einschalten, je 30 Fotos – das ist euer A/B-Test für den Filter. */
+function toggleGeoPrior(){S.geoPrior=!S.geoPrior;saveSettings();render();toast(S.geoPrior?'Vorschläge werden nach Ort und Jahreszeit sortiert.':'Standort-Filter aus – Reihenfolge kommt unverändert von der KI.');}
 function toggleFuzz(){S.fuzzAll=!S.fuzzAll;saveSettings();render();}
 function togglePublic(){S.publicDefault=!S.publicDefault;saveSettings();render();}
 function setPin(v){S.pin=(v||'').replace(/\D/g,'').slice(0,6);saveSettings();}
