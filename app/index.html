@@ -788,25 +788,76 @@ async function plantnetIdentify(dataUrl,shots){
 /* Läuft lokal auf dem Gerät. Modell wird beim 1. Mal aus dem CDN geladen (~16 MB) und danach
    vom Browser gecacht → funktioniert anschließend auch offline. Kein Server, keine Daten verlassen das Gerät. */
 const AI_CACHE='bioglow-ai-v1';
-let _aiCacheN=0;
+let _aiCacheN=0,_persisted=null,_storeMb=null;
 async function aiCacheCount(){try{const c=await caches.open(AI_CACHE);return (await c.keys()).length;}catch(e){return 0;}}
+/* Laeuft die App vom Startbildschirm (installiert) statt im Browser-Tab? */
+function isInstalledApp(){
+  try{return (window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true;}
+  catch(e){return false;}
+}
+async function storagePersisted(){
+  try{if(navigator.storage&&navigator.storage.persisted)return await navigator.storage.persisted();}catch(e){}
+  return null;
+}
+/* Bittet um DAUERHAFTEN Speicher. Ohne das gilt der Cache nur als „best effort":
+   iOS loescht die Daten einer Seite, die sieben Tage lang nicht benutzt wurde – das
+   Modell waere dann ausgerechnet vor dem Turnier still verschwunden. Chrome und Safari
+   entscheiden ohne Nachfrage anhand der bisherigen Nutzung, Firefox fragt nach. */
+async function requestPersistentStorage(){
+  try{
+    if(!navigator.storage||!navigator.storage.persist)return null;
+    if(await navigator.storage.persisted()){_persisted=true;return true;}
+    _persisted=await navigator.storage.persist();
+    return _persisted;
+  }catch(e){return null;}
+}
+async function storageInfo(){
+  try{
+    if(!navigator.storage||!navigator.storage.estimate)return null;
+    const e=await navigator.storage.estimate();
+    return {usedMb:(e.usage!=null?Math.round(e.usage/1048576):null),
+            quotaMb:(e.quota!=null?Math.round(e.quota/1048576):null)};
+  }catch(e){return null;}
+}
+async function refreshStorageState(){
+  try{_aiCacheN=await aiCacheCount();}catch(e){}
+  try{_persisted=await storagePersisted();}catch(e){}
+  try{const st=await storageInfo();if(st)_storeMb=st.usedMb;}catch(e){}
+}
 /* Laedt Bibliothek und Modell einmal aktiv und rechnet ein Bild durch, damit wirklich
    ALLE Gewichtsdateien angefordert werden. Der Service-Worker legt jede dieser Dateien
    dauerhaft im Cache ab (siehe sw.js) – danach laeuft die On-Device-KI auch ohne Netz. */
-try{aiCacheCount().then(function(n){_aiCacheN=n;});}catch(e){}
+try{refreshStorageState();}catch(e){}
 async function prepareOffline(){
   if(!online()){toast('Dafür braucht die App einmal kurz Internet.');return;}
   openModal('<div style="text-align:center"><div class="q-emoji">📦</div><h3>KI wird für offline vorbereitet</h3><div class="mini muted" style="margin:8px 0 12px">Beim ersten Mal rund 16 MB. Bitte das Fenster offen lassen.</div><div class="spinner"></div></div>');
   try{
+    /* Zuerst dauerhaften Speicher anfordern – sonst kann iOS alles nach sieben Tagen
+       ohne Benutzung wieder loeschen. */
+    await requestPersistentStorage();
     await ensureMobilenet();
+    /* Den Tuersteher gleich mit ablegen – sonst fehlt er im Funkloch. */
+    try{await ensureObjectDetector();}catch(e){}
     const c=document.createElement('canvas');c.width=224;c.height=224;
     const x=c.getContext('2d');x.fillStyle='#3f7d55';x.fillRect(0,0,224,224);
     x.fillStyle='#8fce9b';x.beginPath();x.arc(112,112,60,0,6.284);x.fill();
     await _mnet.classify(c,1);
-    _aiCacheN=await aiCacheCount();
+    await refreshStorageState();
+    const dauer=_persisted===true
+      ? '<div class="mini" style="color:var(--em);margin-top:6px">🔒 Dauerhafter Speicher gewährt – die Dateien bleiben liegen, bis ihr sie selbst löscht.</div>'
+      : (_persisted===false
+        ? '<div class="mini" style="background:var(--s50);border-radius:10px;padding:10px;margin-top:8px;text-align:left">⚠️ Der Browser hat <b>dauerhaften</b> Speicher noch nicht gewährt. '
+          +(isInstalledApp()
+            ? 'Benutzt die App noch ein paar Mal, dann gewährt der Browser ihn meist von selbst.'
+            : '<b>Legt die App auf den Startbildschirm</b> (Menü → „App installieren" bzw. Teilen → „Zum Home-Bildschirm") und drückt danach noch einmal hier.')
+          +'<br>Ohne das kann ein iPhone die Dateien löschen, wenn die App sieben Tage nicht benutzt wurde.</div>'
+        : '');
     openModal('<div style="text-align:center"><div class="q-emoji">✅</div><h3>KI ist jetzt offline verfügbar</h3>'
-      +'<div class="mini muted" style="margin:8px 0 12px">'+_aiCacheN+' Dateien dauerhaft gespeichert. Die Arterkennung auf dem Gerät funktioniert ab jetzt auch ohne Empfang – ideal vor dem Demo-Tag.</div>'
-      +'<button class="btn btn-primary" onclick="closeModal()">Fertig</button></div>');
+      +'<div class="mini muted" style="margin:8px 0 4px">'+_aiCacheN+' Dateien gespeichert'
+      +(_storeMb!=null?' · '+_storeMb+' MB belegt':'')
+      +'. Die Arterkennung auf dem Gerät funktioniert ab jetzt auch ohne Empfang – ideal vor dem Demo-Tag.</div>'
+      +dauer
+      +'<button class="btn btn-primary" style="margin-top:12px" onclick="closeModal()">Fertig</button></div>');
   }catch(e){
     openModal('<div style="text-align:center"><div class="q-emoji">⚠️</div><h3>Hat nicht geklappt</h3>'
       +'<div class="mini muted" style="margin:8px 0 12px">'+esc(e.message||String(e))+'<br>Bitte mit stabilem WLAN erneut versuchen.</div>'
@@ -948,6 +999,7 @@ const AI_REGISTRY=[
  {id:'plantnet',kind:'image',name:'Pl@ntNet',version:'v2',offline:false,experimental:false,capabilities:['plant-identification'],handler:'plantnetIdentify'},
  {id:'birdnet',kind:'audio',name:'BirdNET',version:'endpoint',offline:false,experimental:true,capabilities:['bird-song'],handler:'birdRecordFlow'},
  {id:'gemma',kind:'llm',name:'Gemma',version:'3n',offline:true,experimental:true,capabilities:['explanation'],handler:'gemmaAsk'},
+ {id:'objectgate',kind:'image',name:'Türsteher (EfficientDet-Lite0)',version:'MediaPipe 1.0.1',offline:true,experimental:false,capabilities:['person-detection','object-detection'],handler:'detectScene'},
  {id:'habitat',kind:'habitat',name:'Habitat-Regeln',version:'shannon-1.0',offline:true,experimental:false,capabilities:['habitat-scoring'],handler:'score'}
 ];
 function providerById(id){return AI_REGISTRY.find(function(p){return p.id===id;});}
@@ -981,7 +1033,15 @@ function healthCheck(){
   add('Mikrofon',(typeof navigator!=='undefined'&&navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)?'ok':'off');
   add('GPS',(typeof navigator!=='undefined'&&navigator.geolocation)?(S.useGps?'ok':'warn'):'off',S.useGps?'':'in Einstellungen aus');
   add('IndexedDB',(typeof window!=='undefined'&&window.indexedDB)?'ok':'off');
-  add('KI offline verfügbar',_aiCacheN>0?'ok':'warn',_aiCacheN>0?_aiCacheN+' Dateien gespeichert':'Profil → „KI für offline vorbereiten"');
+  add('KI offline verfügbar',_aiCacheN>0?'ok':'warn',
+      _aiCacheN>0?(_aiCacheN+' Dateien'+(_storeMb!=null?' · '+_storeMb+' MB belegt':'')):'Profil → „KI für offline vorbereiten"');
+  add('Objekterkennung (Türsteher)',_odet?'ok':(_odetFailed?'off':'warn'),
+      _odet?'EfficientDet-Lite0 geladen':(_odetFailed?'nicht ladbar – Rückfall auf einfache Prüfung':'lädt beim 1. Scan'));
+  add('Dauerhafter Speicher',_persisted===true?'ok':(_persisted===false?'warn':'off'),
+      _persisted===true?'bleibt bis zum Löschen durch euch'
+      :(_persisted===false
+        ?(isInstalledApp()?'noch nicht gewährt – App öfter benutzen':'App auf den Startbildschirm legen, dann erneut vorbereiten')
+        :'vom Browser nicht unterstützt'));
   add('Cache/Service-Worker',(typeof navigator!=='undefined'&&navigator.serviceWorker&&typeof caches!=='undefined')?'ok':'warn');
   return out;
 }
@@ -1041,24 +1101,100 @@ const AUTO_PLANT_THRESHOLD=0.30;
 /* Gibt {v,img,preds} zurueck. Bild und Vorhersagen werden weitergereicht, damit
    ondeviceIdentify() sie nicht ein zweites Mal berechnen muss (~1 s pro Scan). */
 async function kingdomGate(dataUrl){
-  const out={v:'ok',img:null,preds:null};
+  const out={v:'ok',img:null,preds:null,scene:null,objName:''};
   try{
     const img=await dataUrlToImg(dataUrl);
     out.img=img;
-    if(await containsFace(img)){out.v='person';return out;}
+    /* 1) Objekterkennung, wenn verfuegbar: Person MIT Flaechenanteil, plus Gegenstaende. */
+    const sc=await detectScene(img);
+    out.scene=sc;
+    if(sc){
+      if(sc.personShare>=PERSON_MAX_SHARE){out.v='person';return out;}
+      /* Gegenstand nur ablehnen, wenn kaum eine Person im Bild ist – sonst ist es
+         eher „Kind haelt Fund neben Rucksack" als „Foto vom Rucksack". */
+      if(sc.obj&&sc.objScore>=OBJECT_MIN_SCORE&&sc.personShare<0.15){
+        out.v='object';out.objName=sc.obj;return out;
+      }
+      /* Person klein im Bild → jemand haelt seinen Fund hoch. Bewusst durchlassen. */
+    }
+    /* 2) Ohne Objekterkennung: bisherige Logik als Rueckfall. */
+    if(!sc&&await containsFace(img)){out.v='person';return out;}
     const net=await ensureMobilenet();
     const preds=await net.classify(img,5)||[];
     out.preds=preds;
-    const top=preds[0];
-    if(top){
-      const label=(top.className||'').toLowerCase().replace(/[ ,]/g,'_');
-      const p=top.probability||0;
-      // Klarer Gegenstand mit hoher Sicherheit → ablehnen. Zusätzlich: keines der Top-Labels sieht nach Natur aus.
-      const anyNature=preds.some(x=>NATURE_RE.test((x.className||'').toLowerCase()));
-      if(p>=0.35&&NONNATURE_RE.test(label)&&!anyNature){out.v='object';return out;}
+    if(!sc){
+      const top=preds[0];
+      if(top){
+        const label=(top.className||'').toLowerCase().replace(/[ ,]/g,'_');
+        const p=top.probability||0;
+        // Klarer Gegenstand mit hoher Sicherheit → ablehnen. Zusätzlich: keines der Top-Labels sieht nach Natur aus.
+        const anyNature=preds.some(x=>NATURE_RE.test((x.className||'').toLowerCase()));
+        if(p>=0.35&&NONNATURE_RE.test(label)&&!anyNature){out.v='object';return out;}
+      }
     }
   }catch(e){}
   return out;
+}
+/* ============ Tuersteher mit echter Objekterkennung (MediaPipe) ============
+   Bisher entschied die Browser-Gesichtserkennung (die es in Safari und Firefox gar
+   nicht gibt) plus eine Hautfarben-Regel. Ein Kind von hinten, eine Silhouette oder
+   ein Schuh rutschten durch; braune Rinde loeste umgekehrt Fehlalarm aus.
+   EfficientDet-Lite0 kennt 80 COCO-Klassen, darunter `person` – und zwar MIT
+   Umrandung. Dadurch laesst sich unterscheiden zwischen einem Selfie (Person fuellt
+   das Bild) und einem Kind, das seinen Fund in die Kamera haelt (Person klein am
+   Rand). Genau das ging mit reiner Gesichtserkennung nicht.
+   Faellt der Download aus, greift automatisch die bisherige Logik. */
+const MP_VISION_CDN='https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1';
+const OD_MODEL='https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/int8/latest/efficientdet_lite0.tflite';
+/* Ab welchem Flaechenanteil gilt eine Person als Bildmotiv statt als Beiwerk?
+   Im Feldtest leicht anpassbar (siehe BIOGLOW_Feldtest_und_Demotag.md, Abschnitt 2h). */
+const PERSON_MAX_SHARE=0.35;
+const OBJECT_MIN_SCORE=0.45;
+/* COCO-Klassen, die eindeutig kein Lebewesen sind. Tiere (bird, cat, dog, horse,
+   sheep, cow, bear, elephant, zebra, giraffe) stehen bewusst NICHT hier – das sind Funde! */
+const OD_NONNATURE=['chair','couch','bed','dining table','toilet','tv','laptop','mouse','remote','keyboard','cell phone','microwave','oven','toaster','sink','refrigerator','book','clock','vase','scissors','teddy bear','hair drier','toothbrush','bottle','wine glass','cup','fork','knife','spoon','bowl','backpack','umbrella','handbag','tie','suitcase','car','truck','bus','train','motorcycle','bicycle','traffic light','fire hydrant','stop sign','parking meter','bench','skateboard','surfboard','tennis racket','baseball bat','sports ball','kite','frisbee'];
+const OD_DE={'chair':'Stuhl','couch':'Sofa','bed':'Bett','dining table':'Tisch','tv':'Bildschirm','laptop':'Laptop','cell phone':'Handy','keyboard':'Tastatur','mouse':'Computermaus','remote':'Fernbedienung','book':'Buch','bottle':'Flasche','cup':'Tasse','wine glass':'Glas','clock':'Uhr','vase':'Vase','backpack':'Rucksack','umbrella':'Regenschirm','handbag':'Tasche','suitcase':'Koffer','car':'Auto','truck':'Lastwagen','bus':'Bus','bicycle':'Fahrrad','motorcycle':'Motorrad','bench':'Bank','sink':'Waschbecken','toilet':'Toilette','refrigerator':'Kühlschrank','microwave':'Mikrowelle','oven':'Ofen','scissors':'Schere','teddy bear':'Kuscheltier','toothbrush':'Zahnbürste','traffic light':'Ampel','sports ball':'Ball','skateboard':'Skateboard'};
+let _odet=null,_odetLoading=null,_odetFailed=false;
+async function ensureObjectDetector(){
+  if(_odet)return _odet;
+  if(_odetFailed)return null;
+  if(_odetLoading)return _odetLoading;
+  _odetLoading=(async function(){
+    const vision=await import(MP_VISION_CDN+'/vision_bundle.mjs')
+      .catch(function(){return import(MP_VISION_CDN+'/+esm');});
+    const fileset=await vision.FilesetResolver.forVisionTasks(MP_VISION_CDN+'/wasm');
+    return await vision.ObjectDetector.createFromOptions(fileset,{
+      baseOptions:{modelAssetPath:OD_MODEL},
+      scoreThreshold:0.35,maxResults:10,runningMode:'IMAGE'});
+  })();
+  try{_odet=await _odetLoading;return _odet;}
+  catch(e){_odetFailed=true;_odetLoading=null;return null;}
+}
+/* Liefert {personShare, obj, objScore, names} oder null (Modell nicht verfuegbar). */
+async function detectScene(img){
+  const det=await ensureObjectDetector();
+  if(!det)return null;
+  try{
+    const res=det.detect(img);
+    const area=(img.naturalWidth||img.width||0)*(img.naturalHeight||img.height||0);
+    let personShare=0,obj='',objScore=0;const names=[];
+    ((res&&res.detections)||[]).forEach(function(d){
+      const c=(d.categories&&d.categories[0])||{};
+      const nm=String(c.categoryName||'').toLowerCase(),sc=c.score||0;
+      names.push(nm);
+      const b=d.boundingBox;
+      const share=(b&&area)?Math.min(1,(b.width*b.height)/area):0;
+      if(nm==='person'){if(share>personShare)personShare=share;}
+      else if(OD_NONNATURE.indexOf(nm)>=0&&sc>objScore){objScore=sc;obj=nm;}
+    });
+    return {personShare:personShare,obj:obj,objScore:objScore,names:names};
+  }catch(e){return null;}
+}
+/* Nur der Personen-Anteil (fuer Missions-Belege). Ohne Modell: Rueckfall auf Gesicht. */
+async function personShareOf(img){
+  const sc=await detectScene(img);
+  if(sc)return sc.personShare;
+  return (await containsFace(img))?1:0;
 }
 let _autoUsed='';
 async function autoIdentify(dataUrl){
@@ -1071,8 +1207,14 @@ async function autoIdentify(dataUrl){
   if(pn&&pn.length&&pnTop>=AUTO_PLANT_THRESHOLD){_autoUsed='Auto → Pl@ntNet 🌿';return pn;}   // klar Pflanze → fertig
   // 2) Keine klare Pflanze → jetzt erst der Türsteher (Mensch/Gegenstand?).
   const gate=await kingdomGate(dataUrl);
-  if(gate.v==='person'){_autoUsed='Auto';return [{reject:true,reason:'face',de:'Das sieht nach einem Menschen aus 🙂',hint:'BIOGLOW bestimmt Pflanzen, Tiere und Pilze – bitte fotografiere ein Lebewesen (Blatt, Blüte, Insekt …).'}];}
-  if(gate.v==='object'){_autoUsed='Auto';return [{reject:true,reason:'nonnature',de:'Kein Lebewesen erkannt',hint:'Das sieht nach einem Gegenstand aus (z. B. Möbel/Technik). Bitte eine Pflanze, ein Tier oder einen Pilz fotografieren.'}];}
+  if(gate.v==='person'){_autoUsed='Auto';return [{reject:true,reason:'face',
+    de:'Da ist vor allem ein Mensch im Bild 🙂',
+    hint:'Zeig uns lieber das Blatt, die Blüte oder das Tier – am besten formatfüllend. Wenn du deinen Fund in der Hand hältst, halte ihn näher an die Kamera.'}];}
+  if(gate.v==='object'){_autoUsed='Auto';
+    const w=OD_DE[gate.objName];
+    return [{reject:true,reason:'nonnature',
+      de:w?('Das ist wohl ein '+w+' 🙂'):'Kein Lebewesen erkannt',
+      hint:'BIOGLOW bestimmt Pflanzen, Tiere und Pilze. Such dir etwas Lebendiges – ein einzelnes Blatt reicht schon.'}];}
   // 3) Weder klare Pflanze noch klar Mensch/Objekt → beste vorhandene Vermutung zeigen (motivierend statt Sackgasse).
   let od=null;try{od=await ondeviceIdentify(dataUrl,{img:gate.img,preds:gate.preds,faceChecked:true});}catch(e){}  // On-Device (Tier/unsicher)
   const odReject=od&&od[0]&&od[0].reject;
@@ -1760,7 +1902,15 @@ async function afterPhoto(){
   if(window._monitorSpot){return saveMonitorShot();}
   // Missions-Beleg: hier Selfies abweisen (Kopf-Foto als „Aktion erledigt" gibt es nicht). Beim normalen
   // Scan macht das der Türsteher in autoIdentify NACH Pl@ntNet – so werden echte Pflanzen nie vorschnell abgewiesen.
-  if(window._missionId){try{const _pimg=await dataUrlToImg(camPhoto);if(await containsFace(_pimg))return personPhotoReject();}catch(e){}return saveMissionProof(window._missionId);}
+  if(window._missionId){
+    try{
+      const _pimg=await dataUrlToImg(camPhoto);
+      /* Nicht mehr „irgendein Gesicht" – erst ab einem klaren Bildanteil. Ein Kind, das
+         klein neben dem gesäuberten Ufer steht, soll seinen Beleg behalten. */
+      if(await personShareOf(_pimg)>=PERSON_MAX_SHARE)return personPhotoReject();
+    }catch(e){}
+    return saveMissionProof(window._missionId);
+  }
   // Foto-Coach: bei unscharfem Foto einen Tipp geben und Neuaufnahme anbieten.
   if(window._analysis&&window._analysis.blurry){return photoCoach();}
   continueScan();
