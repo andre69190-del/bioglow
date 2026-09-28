@@ -2644,13 +2644,23 @@ function usingCentralCloud(){const s=S.supabase||{};return !(s.url&&s.key)&&!!(B
    ohne selbst etwas einzurichten. Ein eigener Schlüssel (Profil → KI-Quelle) hat Vorrang. */
 const BIOGLOW_PLANTNET_KEY='2b10Kjxr3YLBAUbhZAPgBHJWZ';   /* zentraler Pl@ntNet-API-Key – alle nutzen ihn automatisch */
 function plantnetKey(){return (S.keys&&S.keys.plantnet)||BIOGLOW_PLANTNET_KEY||'';}
+/* Standort fuer die Klassen-Cloud: NIE metergenau.
+   Seltene Arten oder Schalter „Standorte immer unscharf" → ~5-km-Raster (wie fuzz()),
+   sonst auf 3 Nachkommastellen gerundet (~100 m). Vorher gingen normale Funde auf
+   ~1 m genau in die Cloud, und der Schalter wirkte dort gar nicht. */
+function cloudLatLng(o){
+  if(o.lat==null||o.lng==null)return {lat:null,lng:null};
+  const f=fuzz(o);
+  if(f.gen)return {lat:f.lat,lng:f.lng};
+  return {lat:Math.round(o.lat*1000)/1000,lng:Math.round(o.lng*1000)/1000};
+}
 async function supaSync(o){
   const c=supaCfg();if(!c.url||!c.key)return false;
   try{
     const r=await fetch(c.url.replace(/\/$/,'')+'/rest/v1/observations',{method:'POST',
       headers:{'apikey':c.key,'Authorization':'Bearer '+c.key,'Content-Type':'application/json','Prefer':'return=minimal'},
       body:JSON.stringify({local_id:o.id,species_name:o.speciesSci||o.speciesDe,common_name:o.speciesDe,
-        latitude:o.sensitive?Math.round((o.lat||0)/0.05)*0.05:o.lat,longitude:o.sensitive?Math.round((o.lng||0)/0.05)*0.05:o.lng,
+        latitude:cloudLatLng(o).lat,longitude:cloudLatLng(o).lng,
         status:o.status,score_impact:o.scoreImpact,observed_at:o.observedAt,source:o.source,observer:S.name,class_code:S.classCode||null,
         spot_id:o.spotId||null,spot_name:o.spotName||null,share:o.share||null,photo_url:o.photoUrl||null,
         amount:(o.amount!=null?o.amount:null),amount_unit:o.amountUnit||null})});
@@ -3456,7 +3466,9 @@ async function shareMission(m,scope,radius){
     const r=await fetch(c.url.replace(/\/$/,'')+'/rest/v1/missions',{method:'POST',
       headers:{apikey:c.key,Authorization:'Bearer '+c.key,'Content-Type':'application/json',Prefer:'return=minimal'},
       body:JSON.stringify({local_id:m.id,title:m.title,description:m.desc,organizer:S.name,group_code:scope==='group'?(S.classCode||null):null,
-        latitude:pos&&pos.lat,longitude:pos&&pos.lng,radius_km:radius,is_public:scope==='public',xp:m.xp,impact:m.impact})});
+        /* Geteilte Aktionen – auch öffentliche – nur auf ~1 km genau. Der Standort ist meist
+           dort, wo das Kind die Aktion anlegt (oft zu Hause); für „im Umkreis" reicht das. */
+        latitude:pos?Math.round(pos.lat*100)/100:null,longitude:pos?Math.round(pos.lng*100)/100:null,radius_km:radius,is_public:scope==='public',xp:m.xp,impact:m.impact})});
     return r.ok;
   }catch(e){return false;}
 }
