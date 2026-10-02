@@ -667,7 +667,9 @@ function seedRand(str){let h=2166136261;for(let i=0;i<str.length;i++){h^=str.cha
 
 /* Demo-Vorschläge aus lokalem Katalog, nach Saison gewichtet */
 function demoIdentify(dataUrl){
-  const m=new Date().getMonth()+1,seed=seedRand((dataUrl||'x').slice(0,400));
+  /* Seed aus dem Ende der Bilddaten: Die ersten ~400 Zeichen (JPEG-/EXIF-Kopf) sind bei
+     allen Fotos derselben Kamera gleich – dann kam IMMER dieselbe Art heraus. */
+  const m=new Date().getMonth()+1,seed=seedRand((dataUrl||'x').slice(-600));
   const scored=SPECIES.map((s,i)=>({s,w:(s.months.includes(m)?1:0.4)*(0.6+seedRand(s.key+seed)*0.8)+i*1e-6})).sort((a,b)=>b.w-a.w);
   const top=scored.slice(0,4),tot=top.reduce((a,x)=>a+x.w,0)||1;
   return top.map((x,i)=>({key:x.s.key,sci:x.s.sci,de:x.s.de,emoji:x.s.emoji,grp:x.s.grp,impact:x.s.impact,fact:x.s.fact,
@@ -732,6 +734,20 @@ async function attachWikiThumbs(cands){
 }
 /* Standort-genaue Vorschläge: wenn online + GPS, die lokal HÄUFIGSTEN Arten vorschlagen
    (iNaturalist), sonst der jahreszeitliche Katalog. So ist nicht immer alles gleich. */
+/* Rueckfall ohne KI: Die Liste ist KEINE Erkennung. Deshalb ohne Prozentwert und mit
+   klarem Hinweis – sonst sieht ein Zufallsvorschlag wie ein Treffer aus. */
+function markNoAI(cands,why){
+  return (cands||[]).map(function(c){return Object.assign({},c,{conf:null,noAI:true,
+    fact:'⚠️ Keine KI-Bestimmung möglich'+(why?(' ('+why+')'):'')+'. Das sind nur Vorschläge – bitte die richtige Art selbst suchen oder später erneut scannen.'});});
+}
+let _pnErr='';
+function pnErrText(e){
+  const m=String((e&&e.message)||e||'');
+  if(/Failed to fetch|NetworkError|Load failed|CORS|403/i.test(m))return 'Pl@ntNet antwortet nicht – Internet fehlt oder die Web-Adresse ist beim Pl@ntNet-Schlüssel nicht freigegeben';
+  if(/429/.test(m))return 'Pl@ntNet-Tageskontingent aufgebraucht';
+  if(/401/.test(m))return 'Pl@ntNet-Schlüssel ungültig';
+  return 'Pl@ntNet: '+m;
+}
 async function demoIdentifyLocal(dataUrl){
   if(online()&&S.useGps){
     try{
@@ -1202,7 +1218,9 @@ async function autoIdentify(dataUrl){
   //    durchkommen und NIE vom Personen-/Objekt-Türsteher abgewiesen werden (schützt z. B. formatfüllende Blüten).
   const canPn=online()&&!!plantnetKey();
   let pn=null;
-  if(canPn){try{pn=await plantnetIdentify(dataUrl);}catch(e){}}
+  _pnErr='';
+  if(canPn){try{pn=await plantnetIdentify(dataUrl);}catch(e){if(!/keine Pflanze/.test(String(e&&e.message)))_pnErr=pnErrText(e);}}
+  else if(!online())_pnErr='offline';
   const pnTop=(pn&&pn[0]&&typeof pn[0].conf==='number')?pn[0].conf:0;
   if(pn&&pn.length&&pnTop>=AUTO_PLANT_THRESHOLD){_autoUsed='Auto → Pl@ntNet 🌿';return pn;}   // klar Pflanze → fertig
   // 2) Keine klare Pflanze → jetzt erst der Türsteher (Mensch/Gegenstand?).
@@ -1222,7 +1240,7 @@ async function autoIdentify(dataUrl){
   if(pn&&pn.length&&pnTop>=odTop){_autoUsed='Auto → Pl@ntNet 🌿';return pn;}          // schwache Pflanze bevorzugen (Klasse fotografiert meist Pflanzen)
   if(od&&!odReject&&od.length){_autoUsed='Auto → On-Device 📱';return od;}            // grobe Tier-Vermutung
   if(pn&&pn.length){_autoUsed='Auto → Pl@ntNet 🌿';return pn;}
-  try{const d=await demoIdentifyLocal(dataUrl);if(d&&d.cands&&d.cands.length){_autoUsed='Auto (offline · Vorschläge)';return d.cands;}}catch(e){} // Offline-Rückfall
+  try{const d=await demoIdentifyLocal(dataUrl);if(d&&d.cands&&d.cands.length){_autoUsed='Keine KI-Bestimmung – nur Vorschläge';if(_pnErr)toast('⚠️ '+_pnErr+'.');return markNoAI(d.cands,_pnErr);}}catch(e){} // Rueckfall ohne KI
   return [{reject:true,reason:'nonnature',de:'Kein Lebewesen sicher erkannt',hint:'Bitte näher heran, scharf stellen und erneut versuchen.'}];
 }
 /* ================= Standort- und Saison-Filter (Massnahme 1) =================
@@ -1293,7 +1311,7 @@ async function identify(dataUrl,queryText){
   return res;
 }
 async function identifyRaw(dataUrl,queryText){
-  const p=S.provider;
+  const p=S.provider;let _failed=false;
   try{
     if(p==='auto'){
       if(!_mnet&&!(online()&&plantnetKey()))toast('KI wird vorbereitet (beim 1. Mal ~16 MB) …');
@@ -1310,9 +1328,10 @@ async function identifyRaw(dataUrl,queryText){
     }
     if(p==='plantnet')return {provider:'Pl@ntNet',cands:await withMetrics('plantnet',plantnetIdentify)(dataUrl)};
     if(p==='inat'&&queryText)return {provider:'iNaturalist',cands:await withMetrics('inat',inatSearch)(queryText)};
-  }catch(e){toast('Anbieter nicht erreichbar – nutze Demo. ('+(e.message||e)+')');}
+  }catch(e){_failed=true;toast('⚠️ '+(p==='plantnet'?pnErrText(e):('Anbieter nicht erreichbar: '+(e.message||e)))+'. Es folgen nur Vorschläge.');}
   await new Promise(r=>setTimeout(r,400));
   const d=await withMetrics('demo',demoIdentifyLocal)(dataUrl);
+  if(_failed)return {provider:'Keine KI-Bestimmung – nur Vorschläge',cands:markNoAI(d.cands,'')};
   return {provider:d.local?'Umgebung (Standort)':'Demo',cands:d.cands};
 }
 
@@ -2026,7 +2045,7 @@ function aiHitStats(){
 async function confirmSpecies(i){
   const c=window._cands[i];
   if(!c||c.reject){closeModal();toast('Bitte ein Lebewesen (Pflanze/Tier/Pilz) fotografieren.');return;}
-  logAiHit(i,(window._cands||[]).length,window._lastProvider,c.conf,_geoUsed);
+  if(!c.noAI)logAiHit(i,(window._cands||[]).length,window._lastProvider,c.conf,_geoUsed); // Vorschlaege ohne KI zaehlen nicht zur Trefferquote
   closeModal();
   openModal('<div style="text-align:center"><div class="spinner"></div><div class="muted mini">Standort & Steckbrief werden erfasst …</div></div>');
   let pos=null;try{pos=await getPosition();}catch(e){}
@@ -2678,7 +2697,7 @@ async function syncPending(){
 }
 /* ---------- Live-BioBlitz: Klassen-Event in Echtzeit (Polling gegen Supabase) ---------- */
 function openLiveBlitz(){
-  if(!supaOn())return toast('Für das Live-Event bitte zuerst die Cloud/Klasse einrichten (Profil → Für Lehrkräfte).');
+  if(!supaOn())return toast('Für das Live-Event bitte zuerst unter Profil → Klasse & Cloud einen Gruppencode eintippen.');
   window._blitzPollStop=false;
   openModal('<div class="row" style="justify-content:space-between;margin-bottom:6px"><h3><span class="net" style="background:#ef4444;display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px"></span>Live-BioBlitz</h3><span class="mini muted">'+(S.classCode?('Klasse „'+esc(S.classCode)+'"'):'alle')+'</span></div>'
     +'<div class="mini muted" style="margin-bottom:10px">Aktualisiert sich automatisch. Jeder Fund eures Teams erscheint sofort.</div>'
@@ -2734,7 +2753,7 @@ function joinByCodePrompt(){
 }
 function openTeacherArea(){
   if(S.pin){const e=prompt('Lehrer-/Admin-PIN:');if(e!==S.pin){toast('Falsche PIN.');return;}}
-  openModal('<h3>🔧 Für Lehrkräfte / Erweitert</h3><div class="mini muted" style="margin:4px 0 10px">Einmal einrichten – Kinder brauchen danach nur den Beitritts-Code. Anleitung: SUPABASE_Anleitung_fuer_Kinder.md</div>'
+  openModal('<h3>🔧 Für Lehrkräfte / Erweitert</h3><div class="mini muted" style="margin:4px 0 10px">Nur nötig für eine eigene Cloud. Mit der zentralen Cloud reicht im Profil der Gruppencode.</div>'
     +'<label class="fld">Supabase URL</label><input type="text" value="'+esc(supaCfg().url)+'" placeholder="https://xxxx.supabase.co" oninput="onSupaInput(\'url\',this.value)">'
     +'<label class="fld">Supabase anon-Key</label><input type="password" value="'+esc(supaCfg().key)+'" placeholder="eyJhbGci…" oninput="onSupaInput(\'key\',this.value)">'
     +'<label class="fld">Klassen-/Gruppencode</label><input type="text" value="'+esc(S.classCode||'')+'" placeholder="z. B. 8b-2026" oninput="onClassInput(this.value)">'
@@ -3023,7 +3042,7 @@ const FAQ=[
   {q:'Sind mein Standort und meine Fotos sicher?',a:'Ja. Alles bleibt zuerst lokal auf dem Gerät. Standorte gefährdeter Arten werden öffentlich unscharf gemacht. Du brauchst keinen echten Namen. Geteilt wird nur, wenn du es aktiv machst (Export oder Klassencode).'},
   {q:'Warum geht die Kamera / das Mikrofon nicht?',a:'Kamera, Mikrofon, GPS und Bluetooth brauchen eine sichere Verbindung (https) und deine Freigabe. Öffne die App über die Web-Adresse (nicht als Datei) und erlaube den Zugriff, wenn der Browser fragt. Am besten am Handy (Chrome/Android).'},
   {q:'Was ist „Forschungsqualität"?',a:'Wenn eine zweite Person deinen Fund bestätigt (Peer-Bestätigung), wird er „Forschungsqualität" (⭐) – wie bei iNaturalist. Solche Funde kannst du an die echte Wissenschaft (iNaturalist → GBIF) weitergeben.'},
-  {q:'Wie mache ich mit meiner Klasse mit?',a:'Eine Lehrkraft richtet einmal die Cloud ein und teilt einen Klassen-Code. Diesen fügst du unter Profil → „Mit Klassen-Code beitreten" ein. Dann seht ihr das Klassen-Dashboard und den Live-BioBlitz.'},
+  {q:'Wie mache ich mit meiner Klasse mit?',a:'Alle tippen unter Profil → „Klasse & Cloud" denselben Gruppencode ein (die Cloud ist schon eingerichtet). Dann seht ihr das Klassen-Dashboard und den Live-BioBlitz.'},
   {q:'Wie lasse ich mir Texte vorlesen / nutze den Farbenblind-Modus?',a:'Unter Profil → Einstellungen: „Leichte Sprache", „Farbenblind-Modus" und „Große Schrift" einschalten. Viele Stellen (Quiz, Tipp, Station) haben zusätzlich einen 🔊-Vorlesen-Knopf.'},
   {q:'Wie verbinde ich den Roboter / die BIOGLOW-Ampel?',a:'Start → 🔬 Sensoren → „🤖 Roboter-Sonde" (Werte auslesen) oder „🚦 BIOGLOW-Ampel" (Score senden). Das braucht Chrome/Edge oder Android (Web-Bluetooth). Anleitung: BIOGLOW_Hardware_Bauanleitung.md.'},
   {q:'Wie exportiere ich meine Daten?',a:'Profil → Daten: „Biodiversitätsbericht (PDF)" (Kennzahlen + Diagramme), CSV, Darwin-Core (für die Wissenschaft), „An echte Wissenschaft senden" oder Backup. Du entscheidest, ob und wann du teilst.'}
@@ -3433,7 +3452,7 @@ function addCustomMission(){
   const cloud=supaOn();
   const cloudBanner=cloud
     ? '<div class="mini" style="margin:4px 0 10px;color:var(--em-d)">☁️ Cloud aktiv'+(S.classCode?(' · Gruppe „'+esc(S.classCode)+'"'):'')+' – „Gruppe"/„Öffentlich" funktioniert.</div>'
-    : '<div class="banner" style="background:#7c2d12;color:#fff;margin:4px 0 10px"><div class="ic">⚠️</div><div class="mini"><b>Ohne Cloud sehen andere die Aktion NICHT.</b> „Nur ich" bleibt auf diesem Gerät. Zum Teilen einmalig die Cloud einrichten: Profil → Klasse & Cloud → mit Klassen-Code beitreten (oder Lehrkraft-Bereich).</div></div>';
+    : '<div class="banner" style="background:#7c2d12;color:#fff;margin:4px 0 10px"><div class="ic">⚠️</div><div class="mini"><b>Ohne Cloud sehen andere die Aktion NICHT.</b> „Nur ich" bleibt auf diesem Gerät. Zum Teilen unter Profil → Klasse & Cloud einen Gruppencode eintippen.</div></div>';
   openModal('<h3>🤝 Aktion erstellen & teilen</h3><div class="mini muted" style="margin:4px 0 10px">Z. B. eine <b>Gewässersäuberung</b> oder Müllsammel-Aktion – für Klasse, AG, Schule oder Verein.</div>'
     +cloudBanner
     +'<label class="fld">Titel</label><input type="text" id="cmTitle" placeholder="z. B. Müllsammeln am Bach">'

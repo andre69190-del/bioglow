@@ -13,7 +13,7 @@
    Arten-APIs (iNaturalist, GBIF, Wetter, Wikipedia) bleiben bewusst ungecacht. */
 const AI_CACHE = 'bioglow-ai-v1';
 const AI_HOSTS = /(^|\.)(jsdelivr\.net|unpkg\.com|storage\.googleapis\.com|tfhub\.dev|kaggle\.com|gstatic\.com)$/i;
-const CACHE = 'bioglow-20260928182636';
+const CACHE = 'bioglow-20261002161411';
 const SHELL = ['./', './index.html', './manifest.json', './icon.svg'];
 
 self.addEventListener('install', (e) => {
