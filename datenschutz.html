@@ -43,8 +43,10 @@
       speichert sie auf dem Gerät: ein Erkennungsmodell für Arten (TensorFlow.js/MobileNet) und ein
       kleines Modell, das prüft, ob vor allem ein Mensch oder ein Gegenstand im Bild ist. Beide
       rechnen ausschließlich <b>lokal auf dem Gerät</b> – <b>es wird dabei kein Bild übertragen.</b>
-      Der Menschen-Erkenner dient nur dazu, unpassende Fotos abzulehnen; es werden weder Gesichter
-      gespeichert noch Personen wiedererkannt.</li>
+      Der Menschen-Erkenner dient nur dazu, unpassende Fotos abzulehnen; bei Müll-Sammelaktionen zählt
+      dasselbe Modell gut sichtbare Gegenstände (z. B. Flaschen) im Vorher- und Nachher-Foto als Hinweis.
+      Es werden weder Gesichter gespeichert noch Personen wiedererkannt. Vorher-Fotos von Sammelaktionen
+      bleiben auf dem Gerät.</li>
     <li><b>Zentrale Cloud (Supabase, selbst gehostet):</b> Sobald ein <b>Gruppencode</b> genutzt oder ein
       Fund/eine Aktion geteilt wird, werden gespeichert: Artname, Zeitpunkt, Status, Punkte, frei
       gewählter <b>Anzeigename</b>, Gruppencode und ein <b>gerundeter</b> Standort: bei Funden auf etwa
