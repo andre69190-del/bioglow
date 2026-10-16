@@ -310,7 +310,7 @@ const IDB = (()=>{
 /* ---------- Einstellungen (localStorage) ---------- */
 const LS='bioglow-settings';
 function loadSettings(){try{return Object.assign(defSettings(),JSON.parse(localStorage.getItem(LS)||'{}'));}catch(e){return defSettings();}}
-function defSettings(){return {mode:'explorer',provider:'auto',keys:{plantnet:'',kindwise:'',birdnet:''},streak:0,lastDaily:'',dailyBest:0,grade:'3',supabase:{url:'',key:''},classCode:'',theme:'none',blitz:null,customMissions:[],stations:[],wrongPool:[],name:'Forscher:in',dark:false,bigText:false,cb:false,easy:false,useGps:true,geoPrior:true,fuzzAll:false,publicDefault:false,pin:'',blitzMin:15,lang:'de',aiAsked:false,gemmaUrl:'',period:30,devMode:false,onbVariant:'',onbRating:'',onbHide:true,surveyDone:false};}
+function defSettings(){return {mode:'explorer',provider:'auto',keys:{plantnet:'',kindwise:'',birdnet:''},streak:0,lastDaily:'',dailyBest:0,grade:'3',supabase:{url:'',key:''},classCode:'',theme:'none',blitz:null,customMissions:[],stations:[],wrongPool:[],name:'Forscher:in',dark:false,bigText:false,cb:false,easy:false,useGps:true,geoPrior:true,fuzzAll:false,publicDefault:false,pin:'',blitzMin:15,lang:'de',aiAsked:false,gemmaUrl:'',period:30,devMode:false,onbVariant:'',onbRating:'',onbHide:true,surveyDone:false,remind:true,remindDays:3,remindSnooze:'',firstSeen:''};}
 let S = loadSettings();
 function saveSettings(){try{localStorage.setItem(LS,JSON.stringify(S));}catch(e){}}
 
@@ -1401,6 +1401,7 @@ function screenHome(){
   const recent=OBS.slice().reverse().slice(0,4);
   const daily=dailyChallengeCard();
   return `<div class="screen">
+    ${reminderCard()}
     ${!online()?'<div class="banner" style="background:#1e293b;margin-bottom:14px"><div class="ic">📴</div><div><b>Offline</b><div class="mini" style="opacity:.8">Funde werden lokal gespeichert.</div></div></div>':''}
     ${S.easy?`<div class="card" style="margin-bottom:14px;background:var(--em-tint);border:1px solid var(--em-soft)">
       <div class="row" style="justify-content:space-between;align-items:flex-start"><div><b style="color:var(--em-deep)">So einfach geht es:</b>
@@ -1619,6 +1620,9 @@ function screenProfile(){
       ${tglRow('Standort-Filter für die KI','Vorschläge nach Ort &amp; Jahreszeit sortieren',S.geoPrior,'toggleGeoPrior()')}
       ${tglRow('Standorte immer unscharf','Schützt ALLE Fundorte (nicht nur seltene Arten)',S.fuzzAll,'toggleFuzz()')}
       ${tglRow('Neue Funde öffentlich','Standard fürs Teilen in der Cloud',S.publicDefault,'togglePublic()')}
+      ${tglRow('Erinnerung an Missionen','Hinweis auf der Startseite, wenn eine Mission wartet',S.remind,'toggleRemind()')}
+      ${S.remind?`<label class="fld">Erinnern, wenn so lange keine Mission war</label>
+      <select onchange="setRemindDays(this.value)">${[1,3,7].map(d=>`<option value="${d}" ${(+S.remindDays||3)===d?'selected':''}>${d===1?'1 Tag':d+' Tage'}</option>`).join('')}</select>`:''}
       <label class="fld">Eltern-/Lehrer-PIN (Schul-Modus sperren)</label>
       <input type="password" inputmode="numeric" value="${esc(S.pin)}" placeholder="4–6 Ziffern (leer = aus)" oninput="setPin(this.value)">
       <label class="fld">BioBlitz-Dauer</label>
@@ -3625,7 +3629,14 @@ const DE2EN={
   'Wiese':'Meadow','Teich':'Pond','Trockenrasen':'Dry grassland','Offenland':'Open land','Garten':'Garden','Siedlung':'Settlement',
   'Häufig':'Common','Selten':'Rare','Geschützt':'Protected','Rückläufig':'Declining','Vorwarnliste':'Near threatened',
   'Insekt':'Insect','Pflanze':'Plant','Amphibie':'Amphibian','Vogel':'Bird','Reptil':'Reptile','Säugetier':'Mammal',
-  'Europa':'Europe','weltweit':'worldwide'
+  'Europa':'Europe','weltweit':'worldwide',
+  'Vorschlag (passt gerade zur Jahreszeit)':'Suggestion (fits the season right now)','Es fehlt nur noch das Nachher-Foto.':'Only the after photo is missing.',
+  'Deine Mission wartet noch!':'Your mission is still waiting!','Zeit für eine neue Mission?':'Time for a new mission?','Bereit für deine erste Mission?':'Ready for your first mission?',
+  '📷 Weitermachen':'📷 Continue','🌱 Mission ansehen':'🌱 View missions','Heute nicht':'Not today','🔕 Erinnerung aus':'🔕 Reminder off',
+  'Erinnerung an Missionen':'Mission reminder','Hinweis auf der Startseite, wenn eine Mission wartet':'Note on the home screen when a mission is waiting',
+  'Erinnern, wenn so lange keine Mission war':'Remind me after this long without a mission',
+  'Okay – morgen erinnern wir dich wieder.':'Okay – we will remind you again tomorrow.','Erinnerung an Missionen ist an.':'Mission reminder is on.',
+  'Erinnerung aus – in den Einstellungen kannst du sie wieder einschalten.':'Reminder off – you can turn it back on in the settings.'
 };
 let _langKeys=null;
 const _wordRe={};
@@ -3686,6 +3697,53 @@ function tglRow(label,desc,on,fn){
   return '<div class="row" style="justify-content:space-between;padding:11px 0;border-top:1px solid var(--s100)"><div style="flex:1;padding-right:10px"><div style="font-weight:700;font-size:13px;color:var(--s900)">'+label+'</div><div class="mini muted">'+desc+'</div></div>'
     +'<button class="btn btn-sm" style="width:auto;min-width:52px;background:'+(on?'var(--em)':'var(--s200)')+';color:'+(on?'#fff':'var(--s600)')+'" onclick="'+fn+'">'+(on?'An':'Aus')+'</button></div>';
 }
+
+/* ============================ ERINNERUNG AN MISSIONEN (Runde 9) ============================
+   Aus der Mitschüler-Umfrage (15.10.2026, 52 Kinder): Gründe waren u. a. „nicht daran gedacht",
+   gewünscht wurde „eine Erinnerung". Standardmäßig AN (S.remind), in den Einstellungen abschaltbar.
+   Zeigt eine Karte auf der Startseite – (1) halb fertige Müll-Mission mit Vorher-Foto, sonst
+   (2) Vorschlag, wenn seit S.remindDays Tagen keine Mission erledigt wurde. „Heute nicht" pausiert bis morgen.
+   Hinweis: Eine Benachrichtigung bei geschlossener App bräuchte Web-Push mit Server – bewusst nicht eingebaut. */
+function _daysSince(iso){const t=Date.parse(iso||'');return isNaN(t)?null:Math.floor((Date.now()-t)/86400000);}
+function missionReminder(){
+  if(!S.remind||S.remindSnooze===todayStr())return null;
+  const ms=allMissions();
+  for(const m of ms){
+    const b=isCleanup(m)?getBefore(m.id):null;
+    if(b){const d=_daysSince(b.at);
+      return {emoji:m.emoji,title:'Deine Mission wartet noch!',
+        text:'„'+m.title+'": Das Vorher-Foto ist gemacht'+(d>0?' (vor '+d+(d===1?' Tag)':' Tagen)'):'')+'. Es fehlt nur noch das Nachher-Foto.',
+        btn:'📷 Weitermachen',act:"startMission('"+String(m.id).replace(/[^\w-]/g,'')+"')"};}
+  }
+  const mObs=OBS.filter(o=>o.source==='mission');
+  const done=new Set(mObs.map(o=>o.speciesKey));
+  const last=mObs.reduce((a,o)=>{const t=o.observedAt||o.createdAt||'';return t>a?t:a;},'');
+  const since=last?_daysSince(last):_daysSince(S.firstSeen);
+  if(since===null||since<Math.max(1,+S.remindDays||3))return null;
+  const open=ms.filter(m=>!done.has('mission_'+m.id));
+  if(!open.length)return null;
+  /* Vorschlag: zur Jahreszeit passend und ohne Sicherheitshinweis bevorzugt; wechselt täglich. */
+  const pool=[open.filter(m=>missionInSeason(m)===true&&!m.safe),open.filter(m=>missionInSeason(m)===true),open].find(l=>l.length);
+  const pick=pool[Math.floor(Date.now()/86400000)%pool.length];
+  return {emoji:pick.emoji,title:last?'Zeit für eine neue Mission?':'Bereit für deine erste Mission?',
+    text:(last?'Deine letzte Mission ist '+since+(since===1?' Tag':' Tage')+' her. ':'')+'Vorschlag'+(missionInSeason(pick)===true?' (passt gerade zur Jahreszeit)':'')+': „'+pick.title+'".',
+    btn:'🌱 Mission ansehen',act:"go('missions')"};
+}
+function reminderCard(){
+  const r=missionReminder();if(!r)return '';
+  return `<div class="card" role="status" style="margin-bottom:14px;background:#fef3c7;border:1px solid #fcd34d">
+    <div class="row" style="gap:12px;align-items:flex-start"><div style="font-size:28px" aria-hidden="true">🔔</div><div style="flex:1">
+      <b style="color:#92400e">${esc(r.title)}</b><div class="mini" style="color:#78350f;margin-top:3px;line-height:1.5">${r.emoji} ${esc(r.text)}</div></div></div>
+    <button class="btn btn-primary btn-sm" style="margin-top:10px" onclick="${r.act}">${r.btn}</button>
+    <div class="row" style="gap:8px;margin-top:8px">
+      <button class="btn btn-ghost btn-sm" style="flex:1" onclick="snoozeRemind()">Heute nicht</button>
+      <button class="btn btn-ghost btn-sm" style="flex:1" onclick="toggleRemind()">🔕 Erinnerung aus</button>
+    </div></div>`;
+}
+function snoozeRemind(){S.remindSnooze=todayStr();saveSettings();render();toast('Okay – morgen erinnern wir dich wieder.');}
+function toggleRemind(){S.remind=!S.remind;if(S.remind)S.remindSnooze='';saveSettings();render();
+  toast(S.remind?'Erinnerung an Missionen ist an.':'Erinnerung aus – in den Einstellungen kannst du sie wieder einschalten.');}
+function setRemindDays(v){S.remindDays=+v||3;saveSettings();render();}
 
 /* ============================ COMMUNITY-AKTIONEN (BUND, Gruppen, selbst erstellen) ============================ */
 function allMissions(){return MISSIONS.concat(S.customMissions||[]);}
@@ -4048,6 +4106,7 @@ function skipOnboarding(){S.onbVariant='skip';saveSettings();logOnboarding('skip
 
 (async function init(){
   try{OBS=await IDB.all();}catch(e){OBS=[];}
+  if(!S.firstSeen){S.firstSeen=new Date().toISOString();saveSettings();}
   applyAppearance();updateNet();applyLang();
   if((location.hash||'').indexOf('#s=')===0){handleStationHash();}
   else{maybeOnboard();}
