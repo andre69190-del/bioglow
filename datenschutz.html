@@ -15,13 +15,19 @@
 <body>
   <p><a href="index.html">‹ Zurück</a></p>
   <h1>Datenschutzerklärung</h1>
-  <p class="note">Stand: Juli 2026. BIOGLOW ist datensparsam gebaut: alles bleibt <b>zuerst nur auf deinem Gerät</b>.
+  <p class="note">Stand: Oktober 2026. BIOGLOW ist datensparsam gebaut: alles bleibt <b>zuerst nur auf deinem Gerät</b>.
   Kein Ersatz für eine Rechtsberatung.</p>
 
   <h2>Verantwortliche Stelle (Art. 13 DSGVO)</h2>
   <p>Andre Arndt · Bürgermeister-Willinger-Str. 77 · 69190 Walldorf · Deutschland<br>
   E-Mail: <a href="mailto:farndt691@gmail.com">farndt691@gmail.com</a><br>
   Betreiber der zentralen Cloud (Supabase, selbst gehostet auf arndt-software.de).</p>
+
+  <h2>Aufruf der App (Server)</h2>
+  <p>BIOGLOW wird von einem selbst betriebenen Server bei der netcup GmbH (Daimlerstraße 25, 76185 Karlsruhe,
+  Rechenzentrum in Deutschland) ausgeliefert. Dabei verarbeitet der Webserver technisch notwendige Daten
+  (IP-Adresse, Zeitpunkt, aufgerufene Datei, Browser-Kennung), um die App auszuliefern und abzusichern
+  (Art. 6 Abs. 1 lit. f DSGVO). Die Protokolle werden nicht ausgewertet und nur so lange gespeichert, wie es dafür nötig ist.</p>
 
   <h2>Welche Daten verarbeitet BIOGLOW?</h2>
   <ul>
@@ -39,8 +45,8 @@
       geht auch an iNaturalist, um die Vorschlagsliste nach den Arten zu sortieren, die in der
       Umgebung und in dieser Jahreszeit gemeldet sind (abschaltbar in den Einstellungen).
       Optional BirdNET – nur mit selbst eingetragenem Endpoint.</li>
-    <li><b>Erkennung auf dem Gerät:</b> Der Browser lädt einmalig zwei Modelle aus einem CDN und
-      speichert sie auf dem Gerät: ein Erkennungsmodell für Arten (TensorFlow.js/MobileNet) und ein
+    <li><b>Erkennung auf dem Gerät:</b> Der Browser lädt einmalig zwei Modelle und
+      speichert sie auf dem Gerät (Programmdateien von jsDelivr, Modelldateien von Google Cloud Storage): ein Erkennungsmodell für Arten (TensorFlow.js/MobileNet) und ein
       kleines Modell, das prüft, ob vor allem ein Mensch oder ein Gegenstand im Bild ist. Beide
       rechnen ausschließlich <b>lokal auf dem Gerät</b> – <b>es wird dabei kein Bild übertragen.</b>
       Der Menschen-Erkenner dient nur dazu, unpassende Fotos abzulehnen; bei Müll-Sammelaktionen zählt
@@ -58,14 +64,21 @@
     <li><b>Feedback &amp; Umfrage (freiwillig):</b> Beim Absenden von „Fehler/Feedback melden" oder der
       „Kurzen Umfrage" werden die Angaben (Text bzw. Antworten, Anzeigename, Sprache, Zeitpunkt) in der
       zentralen Cloud gespeichert und können per E-Mail an den Betreiber (farndt691@gmail.com) gemeldet
-      werden.</li>
+      werden. Der Versand läuft über Gmail (Google).</li>
+    <li><b>Nachgeladene Bibliotheken und Karten:</b> Nur wenn eine Funktion sie braucht, lädt die App
+      Programmdateien von <b>jsDelivr</b> (über Cloudflare/Fastly, USA; z.&nbsp;B. QR-Codes, Erkennungsmodelle,
+      optionales Sprachmodell für Erklärtexte), <b>cdnjs</b> (Cloudflare, USA; Kartenbibliothek) und Kartenkacheln
+      von <b>OpenStreetMap</b>. Dabei erhalten diese Anbieter technisch bedingt die IP-Adresse; weitere Daten
+      werden nicht übertragen. Übermittlungen in die USA stützen sich auf das EU-US Data Privacy Framework bzw.
+      EU-Standardvertragsklauseln.</li>
     <li><b>Kamera / Mikrofon / Standort:</b> nur nach ausdrücklicher Freigabe und nur für die jeweilige Funktion.</li>
   </ul>
 
   <h2>Zweck &amp; Rechtsgrundlage</h2>
   <p>Verarbeitung zur Bereitstellung der App-Funktionen und – bei Gruppen/Cloud – zur gemeinsamen Nutzung
-  in Klasse/Team. Rechtsgrundlage: berechtigtes Interesse (Art. 6 Abs. 1 f DSGVO) bzw. Einwilligung
-  (Art. 6 Abs. 1 a DSGVO). Zweck ist Umweltbildung und Citizen Science – <b>keine Werbung</b>.</p>
+  in Klasse/Team. Rechtsgrundlage: Bereitstellung der aufgerufenen Funktion bzw. berechtigtes Interesse
+  (Art. 6 Abs. 1 lit. b bzw. f DSGVO); beim Teilen von Funden und Fotos sowie bei Feedback und Umfrage
+  deine Einwilligung (Art. 6 Abs. 1 lit. a DSGVO), die du jederzeit widerrufen kannst. Zweck ist Umweltbildung und Citizen Science – <b>keine Werbung</b>.</p>
 
   <h2>Kinder (Art. 8 DSGVO)</h2>
   <p>BIOGLOW richtet sich auch an Kinder. Es werden <b>keine Klarnamen</b> verlangt (frei wählbarer
@@ -87,7 +100,8 @@
 
   <h2>Rechte der Betroffenen</h2>
   <p>Auskunft, Berichtigung, Löschung, Einschränkung, Datenübertragbarkeit und Widerspruch (Art. 15–21
-  DSGVO) sowie Beschwerde bei einer Aufsichtsbehörde. Kontakt: farndt691@gmail.com. Lokale Daten sind
+  DSGVO) sowie Beschwerde bei einer Aufsichtsbehörde, z.&nbsp;B. beim Landesbeauftragten für den Datenschutz und die
+  Informationsfreiheit Baden-Württemberg, Lautenschlagerstraße 20, 70173 Stuttgart. Kontakt: farndt691@gmail.com. Lokale Daten sind
   jederzeit über „Alle lokalen Daten löschen" in der App entfernbar.</p>
 
   <p style="margin-top:24px">Siehe auch <a href="impressum.html">Impressum</a>.</p>
