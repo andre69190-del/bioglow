@@ -457,28 +457,38 @@ function setGoalPrompt(){openModal('<h3>🎯 Ziel ändern</h3><div class="mini m
   +[20,50,100].map(g=>'<button class="btn '+((+S.goal||50)===g?'btn-primary':'btn-ghost')+'" style="margin-top:8px" onclick="S.goal='+g+';saveSettings();closeModal();render()">'+g+' Arten</button>').join(''));}
 
 /* ===================== Wochen-Challenge (Runde 10) ===================== */
+const _sciOf=o=>String(o.speciesSci||'')+' '+String(o.speciesDe||'');
+/* Wochen-Challenges nach Jahreszeit (Runde 10c): nur Aufgaben, die im jeweiligen Monat wirklich machbar sind.
+   months fehlt = ganzjährig. d:true = verschiedene Arten zählen. */
 const WEEK_CH=[
   {t:'3 verschiedene Vögel',e:'🐦',n:3,f:o=>o.source==='scan'&&o.grp==='Vogel',d:true,tip:'Am Futterhaus, auf dem Schulhof oder im Park. Morgens sind Vögel am aktivsten. Auch eine Tonaufnahme vom Gesang zählt.',go:'scan'},
-  {t:'5 verschiedene Pflanzen',e:'🌿',n:5,f:o=>o.source==='scan'&&o.grp==='Pflanze',d:true,tip:'Blätter, Moose, Efeu und Bäume zählen auch im Herbst und Winter. Fotografiere ein Blatt formatfüllend.',go:'scan'},
+  {t:'5 verschiedene Pflanzen',e:'🌿',n:5,months:[3,4,5,6,7,8,9,10,11],f:o=>o.source==='scan'&&o.grp==='Pflanze',d:true,tip:'Fotografiere ein Blatt oder eine Blüte formatfüllend. Auch „Unkraut“ am Wegrand zählt.',go:'scan'},
+  {t:'3 verschiedene Pflanzen im Winter',e:'🌿',n:3,months:[12,1,2],f:o=>o.source==='scan'&&o.grp==='Pflanze',d:true,tip:'Auch im Winter wachsen Gänseblümchen, Efeu, Brennnessel-Rosetten oder Moos. Schau an geschützten, sonnigen Stellen.',go:'scan'},
+  {t:'2 immergrüne Pflanzen',e:'🌲',n:2,months:[11,12,1,2,3],f:o=>o.source==='scan'&&/hedera|taxus|ilex|pinus|picea|abies|viscum|buxus|juniperus|efeu|eibe|stechpalme|kiefer|fichte|tanne|mistel|buchsbaum|wacholder/i.test(_sciOf(o)),d:true,tip:'Efeu, Eibe, Kiefer, Fichte, Stechpalme oder Mistel – sie bleiben im Winter grün. Am besten ein Zweig mit Nadeln oder Blättern.',go:'scan'},
+  {t:'1 Säugetier oder seine Spur',e:'🦊',n:1,months:[11,12,1,2,3],f:o=>o.source==='scan'&&o.grp==='Säugetier',d:true,tip:'Im Schnee oder Matsch sieht man Spuren besonders gut. Fotografiere die Spur und wähle das Tier aus, das sie gemacht hat – zum Beispiel Fuchs, Reh oder Eichhörnchen.',go:'scan'},
+  {t:'1 Mission für Wintervögel',e:'🪺',n:1,months:[10,11,12,1,2],f:o=>o.source==='mission'&&[8,18,23].indexOf(parseInt(String(o.speciesKey).replace('mission_',''),10))>=0,d:false,tip:'Nistkasten säubern oder aufhängen, oder eine Stunde Wintervögel zählen – mit Beweisfoto melden.',go:'missions'},
+  {t:'2 Frühblüher',e:'🌷',n:2,months:[2,3,4],f:o=>o.source==='scan'&&/galanthus|crocus|scilla|eranthis|anemone|primula|ficaria|muscari|tussilago|leucojum|corydalis|schneeglöckchen|krokus|blaustern|winterling|buschwindröschen|schlüsselblume|scharbockskraut|huflattich|märzenbecher/i.test(_sciOf(o)),d:true,tip:'Schneeglöckchen, Krokus, Winterling, Buschwindröschen oder Scharbockskraut – unter Bäumen und an Waldrändern.',go:'scan'},
+  {t:'1 Amphibie',e:'🐸',n:1,months:[3,4,5],f:o=>o.source==='scan'&&o.grp==='Amphibie',d:true,tip:'An Teichen und feuchten Stellen, am besten an milden, feuchten Abenden. Nicht anfassen – nur fotografieren!',go:'scan'},
+  {t:'3 verschiedene Insekten',e:'🐝',n:3,months:[5,6,7,8,9],f:o=>o.source==='scan'&&o.grp==='Insekt',d:true,tip:'An Blüten, unter Steinen und auf Blättern. An sonnigen Tagen um die Mittagszeit klappt es am besten.',go:'scan'},
   {t:'1 Lebensraum-Mission',e:'🪵',n:1,f:o=>o.source==='mission'&&ELEMENT_MISSIONS[parseInt(String(o.speciesKey).replace('mission_',''),10)],d:false,tip:'Zum Beispiel ein Laubhaufen für den Igel, eine Wasserstelle oder eine Totholz-Ecke – mit Beweisfoto melden.',go:'missions'},
-  {t:'3 verschiedene Insekten',e:'🐝',n:3,f:o=>o.source==='scan'&&o.grp==='Insekt',d:true,months:[4,5,6,7,8,9,10],tip:'An Blüten, unter Steinen und auf Blättern. An sonnigen Tagen um die Mittagszeit klappt es am besten.',go:'scan'},
   {t:'8 Funde mit Foto und Standort',e:'📍',n:8,f:o=>o.source==='scan'&&o.lat!=null,d:false,tip:'Schalte „Standort verwenden“ ein (Profil → Einstellungen). Draußen unter freiem Himmel wird der Standort genauer.',go:'scan'},
   {t:'1 Müll-Aktion mit Vorher/Nachher',e:'🧺',n:1,f:o=>o.source==='mission'&&o.photoBefore,d:false,tip:'Mission „Müll sammeln“ öffnen: erst Vorher-Foto, dann sammeln, dann Nachher-Foto von derselben Stelle. Handschuhe!',go:'missions'},
-  {tip:'Rinde und Blätter (auch Laub am Boden) helfen beim Bestimmen. Nutze „Pflanze genau bestimmen“ mit mehreren Fotos.',go:'scan',t:'2 verschiedene Bäume oder Sträucher',e:'🌳',n:2,f:o=>o.source==='scan'&&/eiche|buche|birke|ahorn|linde|kastanie|holunder|hasel|weide|kiefer|fichte|tanne|esche|erle|eibe|weißdorn|schlehe/i.test(o.speciesDe||''),d:true}
+  {t:'2 verschiedene Bäume oder Sträucher',e:'🌳',n:2,f:o=>o.source==='scan'&&/eiche|buche|birke|ahorn|linde|kastanie|holunder|hasel|weide|kiefer|fichte|tanne|esche|erle|eibe|weißdorn|schlehe|quercus|fagus|betula|acer|tilia|aesculus|sambucus|corylus|salix|pinus|picea|abies|fraxinus|alnus|taxus|crataegus|prunus spinosa/i.test(_sciOf(o)),d:true,tip:'Rinde und Blätter (auch Laub am Boden) helfen beim Bestimmen. Nutze „Pflanze genau bestimmen“ mit mehreren Fotos.',go:'scan'}
 ];
 function weekStart(){const d=new Date();const day=(d.getDay()+6)%7;d.setHours(0,0,0,0);d.setDate(d.getDate()-day);return d.getTime();}
-function currentChallenge(){
-  const m=new Date().getMonth()+1;const list=WEEK_CH.filter(c=>!c.months||c.months.indexOf(m)>=0);
-  const wk=Math.floor(weekStart()/(7*864e5));return list[wk%list.length];
-}
+function _chBase(ws){const m=new Date(ws+3*864e5).getMonth()+1; /* Monat am Donnerstag der Woche – bleibt die ganze Woche gleich */
+  const list=WEEK_CH.filter(c=>!c.months||c.months.indexOf(m)>=0);const wk=Math.floor(ws/(7*864e5));return {list,i:wk%list.length};}
+function challengeFor(ws,depth){depth=depth||0;const a=_chBase(ws);let c=a.list[a.i];
+  if(depth<8){const prev=challengeFor(ws-7*864e5,depth+1);if(c===prev)c=a.list[(a.i+1)%a.list.length];} /* nie zweimal hintereinander dieselbe Aufgabe */
+  return c;}
+function currentChallenge(){return challengeFor(weekStart());}
 function challengeProgress(c){const t0=weekStart();const hits=validated().filter(o=>_t(o)>=t0&&c.f(o));return c.d?new Set(hits.map(o=>o.speciesKey)).size:hits.length;}
 function openWeekChallenge(){
   const c=currentChallenge();const t0=weekStart();const hits=validated().filter(o=>_t(o)>=t0&&c.f(o));
   const p=Math.min(c.n,challengeProgress(c)),done=p>=c.n;
   const seen=new Set(),list=[];hits.forEach(o=>{const k=c.d?o.speciesKey:o.id;if(!seen.has(k)){seen.add(k);list.push(o);}});
   const end=new Date(t0+6*864e5);
-  const next=WEEK_CH.filter(x=>!x.months||x.months.indexOf(new Date(t0+7*864e5).getMonth()+1)>=0);
-  const nx=next[(Math.floor(t0/(7*864e5))+1)%next.length];
+  const nx=challengeFor(t0+7*864e5);
   openModal('<div style="text-align:center"><div style="font-size:44px">'+c.e+'</div><h3>Wochen-Challenge</h3><div style="font-size:16px;font-weight:800;margin:4px 0">'+esc(c.t)+'</div>'
     +'<div class="mini muted">bis Sonntag, '+end.toLocaleDateString('de-DE',{day:'numeric',month:'long'})+'</div></div>'
     +'<div style="height:14px;background:var(--s200);border-radius:8px;margin:14px 0 6px;overflow:hidden"><div style="height:100%;width:'+Math.round(p/c.n*100)+'%;background:var(--em)"></div></div>'
