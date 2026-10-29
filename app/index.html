@@ -458,13 +458,13 @@ function setGoalPrompt(){openModal('<h3>🎯 Ziel ändern</h3><div class="mini m
 
 /* ===================== Wochen-Challenge (Runde 10) ===================== */
 const WEEK_CH=[
-  {t:'3 verschiedene Vögel',e:'🐦',n:3,f:o=>o.source==='scan'&&o.grp==='Vogel',d:true},
-  {t:'5 verschiedene Pflanzen',e:'🌿',n:5,f:o=>o.source==='scan'&&o.grp==='Pflanze',d:true},
-  {t:'1 Lebensraum-Mission',e:'🪵',n:1,f:o=>o.source==='mission'&&ELEMENT_MISSIONS[parseInt(String(o.speciesKey).replace('mission_',''),10)],d:false},
-  {t:'3 verschiedene Insekten',e:'🐝',n:3,f:o=>o.source==='scan'&&o.grp==='Insekt',d:true,months:[4,5,6,7,8,9,10]},
-  {t:'8 Funde mit Foto und Standort',e:'📍',n:8,f:o=>o.source==='scan'&&o.lat!=null,d:false},
-  {t:'1 Müll-Aktion mit Vorher/Nachher',e:'🧺',n:1,f:o=>o.source==='mission'&&o.photoBefore,d:false},
-  {t:'2 verschiedene Bäume oder Sträucher',e:'🌳',n:2,f:o=>o.source==='scan'&&/eiche|buche|birke|ahorn|linde|kastanie|holunder|hasel|weide|kiefer|fichte|tanne|esche|erle|eibe|weißdorn|schlehe/i.test(o.speciesDe||''),d:true}
+  {t:'3 verschiedene Vögel',e:'🐦',n:3,f:o=>o.source==='scan'&&o.grp==='Vogel',d:true,tip:'Am Futterhaus, auf dem Schulhof oder im Park. Morgens sind Vögel am aktivsten. Auch eine Tonaufnahme vom Gesang zählt.',go:'scan'},
+  {t:'5 verschiedene Pflanzen',e:'🌿',n:5,f:o=>o.source==='scan'&&o.grp==='Pflanze',d:true,tip:'Blätter, Moose, Efeu und Bäume zählen auch im Herbst und Winter. Fotografiere ein Blatt formatfüllend.',go:'scan'},
+  {t:'1 Lebensraum-Mission',e:'🪵',n:1,f:o=>o.source==='mission'&&ELEMENT_MISSIONS[parseInt(String(o.speciesKey).replace('mission_',''),10)],d:false,tip:'Zum Beispiel ein Laubhaufen für den Igel, eine Wasserstelle oder eine Totholz-Ecke – mit Beweisfoto melden.',go:'missions'},
+  {t:'3 verschiedene Insekten',e:'🐝',n:3,f:o=>o.source==='scan'&&o.grp==='Insekt',d:true,months:[4,5,6,7,8,9,10],tip:'An Blüten, unter Steinen und auf Blättern. An sonnigen Tagen um die Mittagszeit klappt es am besten.',go:'scan'},
+  {t:'8 Funde mit Foto und Standort',e:'📍',n:8,f:o=>o.source==='scan'&&o.lat!=null,d:false,tip:'Schalte „Standort verwenden“ ein (Profil → Einstellungen). Draußen unter freiem Himmel wird der Standort genauer.',go:'scan'},
+  {t:'1 Müll-Aktion mit Vorher/Nachher',e:'🧺',n:1,f:o=>o.source==='mission'&&o.photoBefore,d:false,tip:'Mission „Müll sammeln“ öffnen: erst Vorher-Foto, dann sammeln, dann Nachher-Foto von derselben Stelle. Handschuhe!',go:'missions'},
+  {tip:'Rinde und Blätter (auch Laub am Boden) helfen beim Bestimmen. Nutze „Pflanze genau bestimmen“ mit mehreren Fotos.',go:'scan',t:'2 verschiedene Bäume oder Sträucher',e:'🌳',n:2,f:o=>o.source==='scan'&&/eiche|buche|birke|ahorn|linde|kastanie|holunder|hasel|weide|kiefer|fichte|tanne|esche|erle|eibe|weißdorn|schlehe/i.test(o.speciesDe||''),d:true}
 ];
 function weekStart(){const d=new Date();const day=(d.getDay()+6)%7;d.setHours(0,0,0,0);d.setDate(d.getDate()-day);return d.getTime();}
 function currentChallenge(){
@@ -472,9 +472,26 @@ function currentChallenge(){
   const wk=Math.floor(weekStart()/(7*864e5));return list[wk%list.length];
 }
 function challengeProgress(c){const t0=weekStart();const hits=validated().filter(o=>_t(o)>=t0&&c.f(o));return c.d?new Set(hits.map(o=>o.speciesKey)).size:hits.length;}
+function openWeekChallenge(){
+  const c=currentChallenge();const t0=weekStart();const hits=validated().filter(o=>_t(o)>=t0&&c.f(o));
+  const p=Math.min(c.n,challengeProgress(c)),done=p>=c.n;
+  const seen=new Set(),list=[];hits.forEach(o=>{const k=c.d?o.speciesKey:o.id;if(!seen.has(k)){seen.add(k);list.push(o);}});
+  const end=new Date(t0+6*864e5);
+  const next=WEEK_CH.filter(x=>!x.months||x.months.indexOf(new Date(t0+7*864e5).getMonth()+1)>=0);
+  const nx=next[(Math.floor(t0/(7*864e5))+1)%next.length];
+  openModal('<div style="text-align:center"><div style="font-size:44px">'+c.e+'</div><h3>Wochen-Challenge</h3><div style="font-size:16px;font-weight:800;margin:4px 0">'+esc(c.t)+'</div>'
+    +'<div class="mini muted">bis Sonntag, '+end.toLocaleDateString('de-DE',{day:'numeric',month:'long'})+'</div></div>'
+    +'<div style="height:14px;background:var(--s200);border-radius:8px;margin:14px 0 6px;overflow:hidden"><div style="height:100%;width:'+Math.round(p/c.n*100)+'%;background:var(--em)"></div></div>'
+    +'<div class="mini" style="text-align:center;font-weight:800">'+(done?'✅ Geschafft – super!':p+' von '+c.n+(c.d?' verschiedenen':'')+' geschafft')+'</div>'
+    +(list.length?'<div class="sec-title" style="margin-top:12px"><h2 style="font-size:14px">Das zählt schon</h2></div>'+list.map(o=>'<div class="mini" style="padding:6px 0;border-bottom:1px solid var(--s100)">'+(o.emoji||'✔️')+' '+esc(o.speciesDe||o.speciesKey)+' <span class="muted">· '+new Date(_t(o)).toLocaleDateString('de-DE',{weekday:'short'})+'</span></div>').join(''):'')
+    +'<div class="mini" style="background:var(--s50);border-radius:12px;padding:10px;margin-top:12px;line-height:1.5"><b>💡 Tipp:</b> '+esc(c.tip||'')+'<br><span class="muted">Es zählen nur <b>geprüfte</b> Funde aus dieser Woche (ab Montag).</span></div>'
+    +(nx&&nx!==c?'<div class="mini muted" style="margin-top:8px">Nächste Woche: '+nx.e+' '+esc(nx.t)+'</div>':'')
+    +(done?'':'<button class="btn btn-primary" style="margin-top:12px" onclick="closeModal();go(\''+(c.go||'scan')+'\')">'+(c.go==='missions'?'🎯 Zu den Missionen':'📷 Los, scannen')+'</button>')
+    +'<button class="btn btn-ghost" style="margin-top:8px" onclick="closeModal()">Schließen</button>');
+}
 function weekChallengeCard(){
   const c=currentChallenge();const p=Math.min(c.n,challengeProgress(c));const done=p>=c.n;
-  return `<div class="card" style="margin-top:14px;${done?'background:var(--em-tint)':''}"><div class="row" style="justify-content:space-between"><div class="row"><div style="font-size:26px">${c.e}</div><div><b>Wochen-Challenge</b><div class="mini muted">${esc(c.t)} – bis Sonntag</div></div></div><span class="chip ${done?'chip-em':'chip-amb'}">${done?'✅ geschafft':p+' / '+c.n}</span></div></div>`;
+  return `<div class="card" role="button" tabindex="0" onclick="openWeekChallenge()" style="cursor:pointer;margin-top:14px;${done?'background:var(--em-tint)':''}"><div class="row" style="justify-content:space-between"><div class="row"><div style="font-size:26px">${c.e}</div><div><b>Wochen-Challenge</b><div class="mini muted">${esc(c.t)} – bis Sonntag</div></div></div><span class="chip ${done?'chip-em':'chip-amb'}">${done?'✅ geschafft':p+' / '+c.n} ›</span></div></div>`;
 }
 
 /* ===================== Natur-Garten (Runde 10) – Idee aus unserer Umfrage ===================== *
@@ -1248,6 +1265,7 @@ function openAiDebug(){
   const hc=healthCheck();
   html+='<div class="sec-title"><h2>Health-Check</h2></div><div class="card">'+hc.map(function(h){return '<div class="check-line"><span class="ci">'+_hcDot(h.s)+'</span><span>'+esc(h.l)+(h.note?' <span class="muted">('+esc(h.note)+')</span>':'')+'</span></div>';}).join('')+'</div>';
   const hs=aiHitStats();
+  {const g=gateStats();html+='<div class="sec-title"><h2>Türsteher (Mensch/Gegenstand)</h2></div><div class="card"><div class="mini" style="line-height:1.7">Abgelehnt: <b>'+g.rej+'</b> · davon von euch überstimmt („Stimmt nicht“): <b>'+g.over+'</b><br><span class="muted">Viele Überstimmungen = der Türsteher ist zu streng. Mensch zählt erst ab '+Math.round(PERSON_MIN_SCORE*100)+' % Sicherheit und '+Math.round(PERSON_MAX_SHARE*100)+' % Bildfläche.</span></div></div>';}
   html+='<div class="sec-title"><h2>Trefferquote (eigene Messung)</h2></div><div class="card">';
   if(!hs.alle.n){
     html+='<div class="mini muted">Noch keine bestätigten Funde. Die App misst ab jetzt selbst mit, wie oft der <b>erste</b> Vorschlag der richtige war.</div>';
@@ -1338,6 +1356,9 @@ const OD_MODEL='https://storage.googleapis.com/mediapipe-models/object_detector/
 /* Ab welchem Flaechenanteil gilt eine Person als Bildmotiv statt als Beiwerk?
    Im Feldtest leicht anpassbar (siehe BIOGLOW_Feldtest_und_Demotag.md, Abschnitt 2h). */
 const PERSON_MAX_SHARE=0.35;
+/* Fix 29.10.2026: Eine „Person“ zaehlt nur, wenn das Modell sich sicher ist. Vorher reichte
+   schon 35 % Sicherheit – Baumstaemme, Strauecher oder Tiere wurden dann als Mensch abgewiesen. */
+const PERSON_MIN_SCORE=0.60;
 const OBJECT_MIN_SCORE=0.45;
 /* COCO-Klassen, die eindeutig kein Lebewesen sind. Tiere (bird, cat, dog, horse,
    sheep, cow, bear, elephant, zebra, giraffe) stehen bewusst NICHT hier – das sind Funde! */
@@ -1366,17 +1387,17 @@ async function detectScene(img){
   try{
     const res=det.detect(img);
     const area=(img.naturalWidth||img.width||0)*(img.naturalHeight||img.height||0);
-    let personShare=0,obj='',objScore=0;const names=[];
+    let personShare=0,personScore=0,obj='',objScore=0;const names=[];
     ((res&&res.detections)||[]).forEach(function(d){
       const c=(d.categories&&d.categories[0])||{};
       const nm=String(c.categoryName||'').toLowerCase(),sc=c.score||0;
       names.push(nm);
       const b=d.boundingBox;
       const share=(b&&area)?Math.min(1,(b.width*b.height)/area):0;
-      if(nm==='person'){if(share>personShare)personShare=share;}
+      if(nm==='person'){if(sc>personScore)personScore=sc;if(sc>=PERSON_MIN_SCORE&&share>personShare)personShare=share;}
       else if(OD_NONNATURE.indexOf(nm)>=0&&sc>objScore){objScore=sc;obj=nm;}
     });
-    return {personShare:personShare,obj:obj,objScore:objScore,names:names};
+    return {personShare:personShare,personScore:personScore,obj:obj,objScore:objScore,names:names};
   }catch(e){return null;}
 }
 /* Nur der Personen-Anteil (fuer Missions-Belege). Ohne Modell: Rueckfall auf Gesicht. */
@@ -1398,6 +1419,8 @@ async function autoIdentify(dataUrl){
   if(pn&&pn.length&&pnTop>=AUTO_PLANT_THRESHOLD){_autoUsed='Auto → Pl@ntNet 🌿';return pn;}   // klar Pflanze → fertig
   // 2) Keine klare Pflanze → jetzt erst der Türsteher (Mensch/Gegenstand?).
   const gate=await kingdomGate(dataUrl);
+  if(window._gateOff){window._gateOff=false;gateLog(gate,true);gate.v='ok';}
+  else if(gate.v!=='ok')gateLog(gate,false);
   if(gate.v==='person'){_autoUsed='Auto';return [{reject:true,reason:'face',
     de:'Da ist vor allem ein Mensch im Bild 🙂',
     hint:'Zeig uns lieber das Blatt, die Blüte oder das Tier – am besten formatfüllend. Wenn du deinen Fund in der Hand hältst, halte ihn näher an die Kamera.'}];}
@@ -1694,8 +1717,8 @@ function screenMissions(){
     <button class="btn btn-ghost" style="margin-top:10px" onclick="openLitterBoard()">🧺 Müll-Rangliste (wer sammelt am meisten?)</button>
     ${(function(){const b=blitzInfo();
       if(b&&!b.over)return `<div class="card" style="background:linear-gradient(135deg,#b45309,#f59e0b);color:#fff;border:none;margin-top:6px"><div class="row" style="justify-content:space-between"><div><div class="mini" style="opacity:.85;font-weight:800">⚡ BIOBLITZ LÄUFT</div><h3 style="color:#fff">${b.species} Arten · noch ${b.minutes} Min</h3></div><button class="btn" style="background:#fff;color:#b45309;width:auto;padding:9px 14px" onclick="stopBioBlitz()">Beenden</button></div></div>`;
-      if(b&&b.over)return `<div class="card" style="margin-top:6px;text-align:center"><div style="font-size:34px">🏁</div><b>BioBlitz vorbei!</b><div class="mini muted">${b.species} Arten in 15 Minuten gefunden</div><button class="btn btn-primary btn-sm" style="width:100%;margin-top:8px" onclick="stopBioBlitz()">Super!</button></div>`;
-      return `<div class="banner em" style="margin-top:6px;cursor:pointer" onclick="startBioBlitz()"><div class="ic">⚡</div><div class="mini" style="opacity:.95"><b>BioBlitz starten:</b> Wie viele Arten schaffst du in 15 Minuten?</div></div>`;
+      if(b&&b.over)return `<div class="card" style="margin-top:6px;text-align:center"><div style="font-size:34px">🏁</div><b>BioBlitz vorbei!</b><div class="mini muted">${b.species} Arten in ${(S.blitz&&S.blitz.min)||S.blitzMin||15} Minuten gefunden</div><button class="btn btn-primary btn-sm" style="width:100%;margin-top:8px" onclick="stopBioBlitz()">Super!</button></div>`;
+      return `<div class="banner em" style="margin-top:6px;cursor:pointer" onclick="startBioBlitz()"><div class="ic">⚡</div><div class="mini" style="opacity:.95"><b>BioBlitz starten:</b> Wie viele Arten schaffst du in ${S.blitzMin||15} Minuten?</div></div>`;
     })()}
     ${supaOn()?`<button class="btn btn-ghost" style="margin-top:10px" onclick="openLiveBlitz()"><span class="net" style="background:#ef4444;display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px"></span>Live-BioBlitz (Klassen-Event in Echtzeit)</button>`:''}
   </div>`;
@@ -2100,6 +2123,11 @@ function cancelCamera(){window._monitorSpot=null;window._missionId=null;window._
 /* Leeres/dunkles/überstrahltes Foto ohne Motiv erkennen (z. B. „schwarzes Bild"). */
 function photoLooksEmpty(a){if(!a)return false;const dark=(a.bright!=null&&a.bright<8);const blown=(a.bright!=null&&a.bright>97);const flat=(a.sharp!=null&&a.sharp<SHARP_EMPTY);return dark||blown||flat;}
 function emptyPhotoReject(){openModal('<div style="text-align:center"><div style="font-size:40px">🌑</div><h3>Kein Motiv erkennbar</h3><div class="mini muted" style="margin:8px 0 14px">Das Foto ist zu dunkel, überbelichtet oder leer. Bitte eine <b>Pflanze oder ein Tier formatfüllend und scharf</b> fotografieren.</div><button class="btn btn-em" onclick="closeModal();go(\'scan\')">📷 Neues Foto</button><button class="btn btn-ghost" style="margin-top:8px" onclick="closeModal()">Schließen</button></div>');}
+/* Türsteher-Protokoll für den Feldtest: wie oft lehnt er ab, wie oft wird er überstimmt? */
+function gateLog(gate,overruled){try{const sc=gate&&gate.scene||{};const l=JSON.parse(localStorage.getItem('bioglow_gatelog')||'[]');
+  l.push({t:Date.now(),v:gate&&gate.v,o:overruled?1:0,ps:Math.round((sc.personShare||0)*100),pc:Math.round((sc.personScore||0)*100),obj:sc.obj||''});
+  localStorage.setItem('bioglow_gatelog',JSON.stringify(l.slice(-200)));}catch(e){}}
+function gateStats(){try{const l=JSON.parse(localStorage.getItem('bioglow_gatelog')||'[]');return {rej:l.filter(x=>!x.o).length,over:l.filter(x=>x.o).length};}catch(e){return {rej:0,over:0};}}
 function personPhotoReject(){const mid=window._missionId;openModal('<div style="text-align:center"><div style="font-size:40px">🙂</div><h3>Das sieht nach einem Menschen aus</h3><div class="mini muted" style="margin:8px 0 14px">Bitte fotografiere <b>die Natur oder deine Aktion</b> (z. B. den gesäuberten Uferbereich oder den Müllsack) – nicht dich selbst.</div><button class="btn btn-em" onclick="closeModal();openCamera('+(mid?"'"+mid+"'":"null")+')">📷 Neues Foto</button><button class="btn btn-ghost" style="margin-top:8px" onclick="closeModal()">Schließen</button></div>');}
 async function afterPhoto(){
   closeCamera();
@@ -2188,6 +2216,7 @@ function showCandidates(provider,cands){
       <h3>${esc(r.de)}</h3>
       <div class="mini muted" style="margin:8px 0 14px">${esc(r.hint||'')}</div>
       <button class="btn btn-em" onclick="closeModal();go('scan')">Neues Foto</button>
+      ${(r.reason==='face'||r.reason==='nonnature')&&camPhoto?`<button class="btn btn-ghost" style="margin-top:8px" onclick="window._gateOff=true;proceedIdentify()">🌿 Stimmt nicht – trotzdem bestimmen</button>`:''}
       <button class="btn btn-ghost" style="margin-top:8px" onclick="closeModal()">Schließen</button></div>`);
     window._cands=cands;return;
   }
