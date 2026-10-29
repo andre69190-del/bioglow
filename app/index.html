@@ -310,7 +310,7 @@ const IDB = (()=>{
 /* ---------- Einstellungen (localStorage) ---------- */
 const LS='bioglow-settings';
 function loadSettings(){try{return Object.assign(defSettings(),JSON.parse(localStorage.getItem(LS)||'{}'));}catch(e){return defSettings();}}
-function defSettings(){return {mode:'explorer',provider:'auto',keys:{plantnet:'',kindwise:'',birdnet:''},streak:0,lastDaily:'',dailyBest:0,grade:'3',supabase:{url:'',key:''},classCode:'',theme:'none',blitz:null,customMissions:[],stations:[],wrongPool:[],name:'Forscher:in',dark:false,bigText:false,cb:false,easy:false,useGps:true,geoPrior:true,fuzzAll:false,publicDefault:false,pin:'',blitzMin:15,lang:'de',aiAsked:false,gemmaUrl:'',period:30,devMode:false,onbVariant:'',onbRating:'',onbHide:true,surveyDone:false,remind:true,remindDays:3,remindSnooze:'',firstSeen:'',board:'off',nick:'',deviceId:'',goal:50,place:null};}
+function defSettings(){return {mode:'explorer',provider:'auto',keys:{plantnet:'',kindwise:'',birdnet:''},streak:0,lastDaily:'',dailyBest:0,grade:'3',supabase:{url:'',key:''},classCode:'',theme:'none',blitz:null,customMissions:[],stations:[],wrongPool:[],name:'Forscher:in',dark:false,bigText:false,cb:false,easy:false,useGps:true,geoPrior:true,fuzzAll:false,publicDefault:false,pin:'',blitzMin:15,lang:'de',aiAsked:false,gemmaUrl:'',period:30,devMode:false,onbVariant:'',onbRating:'',onbHide:true,surveyDone:false,remind:true,remindDays:3,remindSnooze:'',firstSeen:'',seenNew:'',board:'off',nick:'',deviceId:'',goal:50,place:null};}
 let S = loadSettings();
 function saveSettings(){try{localStorage.setItem(LS,JSON.stringify(S));}catch(e){}}
 
@@ -1593,6 +1593,7 @@ function screenHome(){
       </div>
     </div>
 
+    ${todayCard()}
     ${weekChallengeCard()}
     ${groupGoalCard()}
     <div id="tipCard" onclick="go('scan')" style="cursor:pointer;margin-top:14px;background:#0f766e;color:#fff;border-radius:var(--r-lg);padding:16px"><div class="row" style="gap:12px"><div style="font-size:30px">${currentTip().e}</div><div style="flex:1"><b>Tipp des Tages</b><div class="mini" style="opacity:.93">${esc(currentTip().t)}</div></div><span class="chip" style="background:rgba(255,255,255,.22);color:#fff">Scannen ›</span></div></div>
@@ -1803,6 +1804,7 @@ function screenProfile(){
       <label class="fld">BioBlitz-Dauer</label>
       <select onchange="setBlitzMin(this.value)">${[10,15,30].map(m=>`<option value="${m}" ${S.blitzMin===m?'selected':''}>${m} Minuten</option>`).join('')}</select>
       <button class="btn btn-ghost btn-sm" style="width:100%;margin-top:12px" onclick="replayOnboarding()">👋 Einführung erneut anzeigen</button>
+      <button class="btn btn-ghost btn-sm" style="width:100%;margin-top:8px" onclick="openWhatsNew()">✨ Was ist neu?</button>
     </div>
 
     <div class="sec-title"><h2>Modus</h2></div>
@@ -3361,6 +3363,67 @@ async function computeSmartTip(){
   if(TAB==='home'&&$('modal').classList.contains('hide'))render();
 }
 function currentTip(){return window._smartTip||tipOfDay();}
+/* ===================== Immer etwas Neues (Runde 10b, 29.10.2026) ===================== *
+ * 1) „Heute in BIOGLOW“: jeden Tag eine andere Art (passend zum Monat), ein Naturkalender-Ereignis
+ *    und ein „Wusstest du?“ aus den geprüften Quizfragen.  2) „Neu in BIOGLOW“ nach jedem Update. */
+function dayNo(){const d=new Date();return Math.floor((Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()))/864e5);}
+function speciesOfDay(){const m=new Date().getMonth()+1;const list=SPECIES.filter(s=>!s.months||s.months.indexOf(m)>=0);const L=list.length?list:SPECIES;let st=17;while(L.length%st===0)st++;return L[(dayNo()*st)%L.length];}
+/* Naturkalender Deutschland – nur gut belegte, jedes Jahr wiederkehrende Ereignisse (Zeiträume ungefähr). */
+const NATURE_CAL=[
+  {m:[12,1,2],e:'🐦',t:'Wintervögel am Futterhaus beobachten. Anfang Januar zählt der NABU bei der „Stunde der Wintervögel“ – macht mit!'},
+  {m:[12,1,2],e:'👣',t:'Bei Schnee oder Matsch: Tierspuren suchen. Wer war heute Nacht unterwegs – Fuchs, Reh oder Katze?'},
+  {m:[11,12,1],e:'🎶',t:'Rotkehlchen singen auch im Winter – sie verteidigen damit ihr Revier.'},
+  {m:[2,3],e:'🌼',t:'Die ersten Frühblüher wie Schneeglöckchen und Krokus öffnen sich – wichtiges Futter für Hummelköniginnen.'},
+  {m:[2,3],e:'🦢',t:'Kraniche ziehen jetzt in großen Keilen nach Norden. Hört ihr ihr Trompeten?'},
+  {m:[3,4],e:'🐸',t:'Krötenwanderung: An feuchten, milden Abenden wandern Erdkröten zu ihren Laichgewässern.'},
+  {m:[4,5],e:'🐦',t:'Die Rauchschwalben kommen aus Afrika zurück – entdeckt ihr die ersten?'},
+  {m:[4,5],e:'🪲',t:'Maikäfer-Zeit: In der Dämmerung brummen sie um Bäume.'},
+  {m:[5],e:'🐦',t:'Im Mai zählt der NABU bei der „Stunde der Gartenvögel“ – eine Stunde Vögel zählen und melden.'},
+  {m:[6,7],e:'✨',t:'Glühwürmchen leuchten in warmen Juninächten am Waldrand.'},
+  {m:[6,8],e:'🐝',t:'NABU-„Insektensommer“: Insekten eine Stunde lang zählen und melden – echte Citizen Science.'},
+  {m:[7,8],e:'🦋',t:'Hochsommer ist Schmetterlingszeit – Brennnesseln und Wildblumen sind Kinderstube und Tankstelle.'},
+  {m:[8,9],e:'🐦',t:'Schwalben sammeln sich auf Leitungen – bald fliegen sie nach Afrika.'},
+  {m:[9,10],e:'🕸️',t:'Am Morgen glitzern Spinnennetze im Tau – zählt, wie viele ihr findet.'},
+  {m:[9,10],e:'🦌',t:'Hirschbrunft: Im Wald röhren die Rothirsche.'},
+  {m:[10,11],e:'🦢',t:'Kraniche ziehen nach Süden. Ihre Rufe hört man oft, bevor man sie sieht.'},
+  {m:[10,11],e:'🦔',t:'Igel fressen sich Winterspeck an und suchen Laubhaufen als Winterquartier.'},
+  {m:[9,10,11],e:'🍄',t:'Pilzzeit! Fotografieren ja – anfassen oder essen nur mit Fachleuten.'},
+  {m:[10,11],e:'🍁',t:'Laubfärbung: Bestimmt Bäume an ihren bunten Blättern – Ahorn, Eiche, Buche …'}
+];
+function natureEventOfDay(){const m=new Date().getMonth()+1;const l=NATURE_CAL.filter(x=>x.m.indexOf(m)>=0);return l.length?l[dayNo()%l.length]:null;}
+function factOfDay(){const pool=(typeof QMYTH!=='undefined'?QMYTH.map(x=>({q:'„'+x.q+'“ – '+(x.a==='Wahr'?'stimmt!':'stimmt nicht!'),f:x.f})):[]).concat(typeof QBANK!=='undefined'?QBANK.filter(x=>x.lv<=2).map(x=>({q:x.q+' → '+x.a,f:x.f})):[]);
+  return pool.length?pool[(dayNo()*7)%pool.length]:null;}
+function todayCard(){
+  const sp=speciesOfDay(),ev=natureEventOfDay(),fa=factOfDay();
+  const found=OBS.some(o=>o.speciesKey===sp.key&&o.status==='validated');
+  setTimeout(()=>{const el=document.getElementById('sodImg');if(el&&online()&&!el.dataset.done){el.dataset.done='1';quizPhotoUrl(sp.sci,sp.de).then(u=>{if(u&&document.getElementById('sodImg'))document.getElementById('sodImg').innerHTML='<img src="'+u+'" alt="" style="width:64px;height:64px;object-fit:cover;border-radius:14px">';}).catch(()=>{});}},50);
+  return `<div class="card" style="margin-top:14px">
+    <div class="row" style="justify-content:space-between;margin-bottom:8px"><b>📅 Heute in BIOGLOW</b><span class="chip chip-amb">jeden Tag neu</span></div>
+    <div class="row" style="gap:12px;align-items:center;cursor:pointer" onclick="go('scan')"><div id="sodImg" style="font-size:40px;width:64px;text-align:center">${sp.emoji}</div>
+      <div style="flex:1"><div class="mini muted">Art des Tages</div><b>${esc(sp.de)}</b><div class="mini" style="line-height:1.4">${esc(sp.fact)}</div>
+      <div class="mini" style="margin-top:3px;color:var(--em-d);font-weight:700">${found?'✅ Hast du schon gefunden!':'🔎 Kannst du sie finden? → Scannen'}</div></div></div>
+    ${ev?`<div style="border-top:1px solid var(--s100);margin-top:10px;padding-top:10px" class="row"><div style="font-size:24px">${ev.e}</div><div class="mini" style="flex:1;line-height:1.45"><b>Naturkalender:</b> ${esc(ev.t)}</div></div>`:''}
+    ${fa?`<div style="border-top:1px solid var(--s100);margin-top:10px;padding-top:10px" class="row"><div style="font-size:24px">💡</div><div class="mini" style="flex:1;line-height:1.45"><b>Wusstest du?</b> ${esc(fa.q)}<br><span class="muted">${esc(fa.f)}</span></div></div>`:''}
+  </div>`;
+}
+/* „Neu in BIOGLOW“ – bei jedem Update hier oben einen Eintrag ergänzen (neuester zuerst). */
+const WHATS_NEW=[
+  {v:'2026-10-29',items:['📊 Die Natur-Gesundheit gilt jetzt für deinen Ort und kann auch sinken – unter „Warum dieser Wert?“ siehst du, woher jeder Punkt kommt.','⭐ Neu: Team-Punkte für deinen Fleiß.','🏆 Freiwillige Bestenliste mit Spitznamen (Profil → Einstellungen).','🎯 Gruppenziel, 🐝 Wochen-Challenge und 🏡 dein Natur-Garten.','📅 Jeden Tag neu: Art des Tages, Naturkalender und „Wusstest du?“.']},
+  {v:'2026-10-16',items:['🔔 Erinnerung an Missionen – weil ihr euch das in der Umfrage gewünscht habt.']},
+  {v:'2026-10-03',items:['🧠 Neues Quiz: Natur-Wissen, „Wer bin ich?“-Rätsel und „Mythos oder Wahrheit?“.','🍂 24 Missionen – passende zur Jahreszeit stehen oben.']}
+];
+function maybeWhatsNew(){
+  const v=WHATS_NEW[0].v;if(S.seenNew===v)return;
+  if(!S.firstSeen||S.firstSeen.slice(0,10)>=v){S.seenNew=v;saveSettings();return;} /* neue Nutzer: nicht stören */
+  if(!$('modal').classList.contains('hide'))return; /* Einführung o. Ä. läuft */
+  const news=WHATS_NEW.filter(x=>!S.seenNew||x.v>S.seenNew).slice(0,3);
+  openModal('<div style="text-align:center"><div class="q-emoji">✨</div><h3>Neu in BIOGLOW</h3></div>'
+    +news.map(n=>'<div class="mini muted" style="margin-top:10px;font-weight:800">'+new Date(n.v).toLocaleDateString('de-DE',{day:'numeric',month:'long'})+'</div>'+n.items.map(i=>'<div class="mini" style="padding:6px 0;line-height:1.5;border-bottom:1px solid var(--s100)">'+esc(i)+'</div>').join('')).join('')
+    +'<button class="btn btn-primary" style="margin-top:14px" onclick="closeModal()">Ausprobieren</button>');
+  S.seenNew=v;saveSettings();
+}
+function openWhatsNew(){S.seenNew='';maybeWhatsNew();}
+
 
 /* ============================ HILFE, GEFÜHRTE TOUR & RECHTLICHES ============================ */
 /* Zwei Einführungen: KURZ (Standard, die 4-Schritt-Geschichte) und LANG (jeder Bereich).
@@ -3766,7 +3829,7 @@ const DE2EN={
   'BioBlitz starten:':'Start BioBlitz:','Wie viele Arten schaffst du in 15 Minuten?':'How many species can you find in 15 minutes?',
   'BioBlitz vorbei!':'BioBlitz over!','Beenden':'Stop','Leicht':'Easy','Mittel':'Medium','Schwer':'Hard','Gruppe':'Group','Community':'Community',
   // Lernen
-  'Lernen & Quiz':'Learn & quiz','Quiz-Modi':'Quiz modes','Wochen-Challenge':'Weekly challenge','🏡 Dein Natur-Garten':'🏡 Your nature garden','🏆 Bestenliste':'🏆 Leaderboard','🏆 Bestenliste ansehen':'🏆 View leaderboard','📍 Hier ist mein Ort':'📍 This is my place','Automatisch':'Automatic','Ziel ändern':'Change goal','Meine Gruppe':'My group','Alle':'Everyone','Nur meine Gruppe':'Only my group','🎲 Anderen Spitznamen würfeln':'🎲 Roll another nickname','🏆 Bestenliste (freiwillig, mit Spitznamen)':'🏆 Leaderboard (voluntary, nicknames)','🧺 Müll-Rangliste (wer sammelt am meisten?)':'🧺 Litter ranking (who collects most?)','Gemischt':'Mixed','Natur-Wissen':'Nature knowledge','Wer bin ich?':'Who am I?','Mythos oder Wahrheit?':'Myth or truth?','Wer ist das?':'Who is this?','💡 Noch ein Hinweis':'💡 Another hint','🍂 passt jetzt':'🍂 in season','Lernkarten':'Flash cards','Altersstufe':'Age level',
+  'Lernen & Quiz':'Learn & quiz','Quiz-Modi':'Quiz modes','Wochen-Challenge':'Weekly challenge','📅 Heute in BIOGLOW':'📅 Today in BIOGLOW','jeden Tag neu':'new every day','Art des Tages':'Species of the day','Neu in BIOGLOW':'New in BIOGLOW','Ausprobieren':'Try it','✨ Was ist neu?':'✨ What’s new?','🏡 Dein Natur-Garten':'🏡 Your nature garden','🏆 Bestenliste':'🏆 Leaderboard','🏆 Bestenliste ansehen':'🏆 View leaderboard','📍 Hier ist mein Ort':'📍 This is my place','Automatisch':'Automatic','Ziel ändern':'Change goal','Meine Gruppe':'My group','Alle':'Everyone','Nur meine Gruppe':'Only my group','🎲 Anderen Spitznamen würfeln':'🎲 Roll another nickname','🏆 Bestenliste (freiwillig, mit Spitznamen)':'🏆 Leaderboard (voluntary, nicknames)','🧺 Müll-Rangliste (wer sammelt am meisten?)':'🧺 Litter ranking (who collects most?)','Gemischt':'Mixed','Natur-Wissen':'Nature knowledge','Wer bin ich?':'Who am I?','Mythos oder Wahrheit?':'Myth or truth?','Wer ist das?':'Who is this?','💡 Noch ein Hinweis':'💡 Another hint','🍂 passt jetzt':'🍂 in season','Lernkarten':'Flash cards','Altersstufe':'Age level',
   'Tägliche Challenge':'Daily challenge','Jetzt spielen':'Play now','Nochmal spielen':'Play again','Ergebnis teilen':'Share result',
   'Welcher Lebensraum?':'Which habitat?','Ordne Arten ihrem Lebensraum zu.':'Match species to their habitat.',
   'Wo lebt das?':'Where does it live?','Auf welchem Kontinent kommt die Art vor?':'On which continent does it occur?',
@@ -4287,7 +4350,7 @@ function skipOnboarding(){S.onbVariant='skip';saveSettings();logOnboarding('skip
   if(!S.firstSeen){S.firstSeen=new Date().toISOString();saveSettings();}
   applyAppearance();updateNet();applyLang();
   if((location.hash||'').indexOf('#s=')===0){handleStationHash();}
-  else{maybeOnboard();}
+  else{maybeOnboard();setTimeout(()=>{try{maybeWhatsNew();}catch(e){}},1500);}
   if(typeof computeSmartTip==='function'){computeSmartTip().then(()=>{if(TAB==='home')render();}).catch(()=>{});}
   /* Katalog-Fotos im Hintergrund vorladen (verzögert, damit der Start flüssig bleibt). */
   setTimeout(()=>{try{prewarmPhotos();}catch(e){}},2500);
