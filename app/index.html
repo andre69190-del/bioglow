@@ -1374,6 +1374,16 @@ const OBJECT_MIN_SCORE=0.45;
    sheep, cow, bear, elephant, zebra, giraffe) stehen bewusst NICHT hier – das sind Funde! */
 const OD_NONNATURE=['chair','couch','bed','dining table','toilet','tv','laptop','mouse','remote','keyboard','cell phone','microwave','oven','toaster','sink','refrigerator','book','clock','vase','scissors','teddy bear','hair drier','toothbrush','bottle','wine glass','cup','fork','knife','spoon','bowl','backpack','umbrella','handbag','tie','suitcase','car','truck','bus','train','motorcycle','bicycle','traffic light','fire hydrant','stop sign','parking meter','bench','skateboard','surfboard','tennis racket','baseball bat','sports ball','kite','frisbee'];
 const OD_DE={'chair':'Stuhl','couch':'Sofa','bed':'Bett','dining table':'Tisch','tv':'Bildschirm','laptop':'Laptop','cell phone':'Handy','keyboard':'Tastatur','mouse':'Computermaus','remote':'Fernbedienung','book':'Buch','bottle':'Flasche','cup':'Tasse','wine glass':'Glas','clock':'Uhr','vase':'Vase','backpack':'Rucksack','umbrella':'Regenschirm','handbag':'Tasche','suitcase':'Koffer','car':'Auto','truck':'Lastwagen','bus':'Bus','bicycle':'Fahrrad','motorcycle':'Motorrad','bench':'Bank','sink':'Waschbecken','toilet':'Toilette','refrigerator':'Kühlschrank','microwave':'Mikrowelle','oven':'Ofen','scissors':'Schere','teddy bear':'Kuscheltier','toothbrush':'Zahnbürste','traffic light':'Ampel','sports ball':'Ball','skateboard':'Skateboard'};
+/* Runde 11 (06.11.2026): Missions-Belege prüfen. Vorher galt jedes Foto mit Motiv als Beleg.
+   Das kann eine KI nicht perfekt prüfen (einen Laubhaufen kennt kein Modell) – aber sie fängt das
+   Offensichtliche ab: Bildschirm/drinnen, dasselbe Foto zweimal, dieselbe Mission mehrmals am Tag. */
+const MISSION_INDOOR=['tv','laptop','keyboard','mouse','remote','cell phone','couch','bed','toilet','microwave','oven','toaster','sink','refrigerator','hair drier','toothbrush','teddy bear'];
+const MISSION_DEVICE_OK=[5,24];            /* Test-Kit bzw. Licht-Sensor: Geräte im Bild sind hier normal */
+const MISSION_REPEAT_H=20;                  /* dieselbe Mission zählt höchstens einmal pro Tag */
+const MISSION_PROOF={1:'den Holzstapel in der Ecke',2:'den gesäuberten Uferbereich',3:'die aufgestellte Nisthilfe',4:'den blühenden Streifen',5:'das Test-Kit mit dem Ergebnis',6:'die frisch eingesäte Fläche',7:'den fertigen Laubhaufen',8:'den aufgehängten Nistkasten',9:'die gesäuberte Stelle',10:'den Steinhaufen',11:'die Wasserschale mit Steinen',12:'den Komposthaufen',13:'den frisch gepflanzten Strauch',14:'die invasive Pflanze',15:'die offene Sandfläche',16:'die Blüte und eure Strichliste',17:'die Stelle, an der die Zwiebeln stecken',18:'den geöffneten, sauberen Nistkasten',19:'euren ungemähten Quadratmeter',20:'das Loch unten im Zaun',21:'die gezählten Regenwürmer',22:'die geernteten Samen',23:'das Futterhaus und eure Zählliste',24:'den Nachthimmel und euren Messwert'};
+function missionProofText(m){return (m&&MISSION_PROOF[m.id])||'deine fertige Aktion';}
+/* Fingerabdruck eines Fotos (FNV-1a über die Bilddaten) – erkennt dasselbe Foto ein zweites Mal. */
+function photoHash(u){let h=0x811c9dc5;const s=String(u||'');const step=Math.max(1,Math.floor(s.length/200000));for(let i=0;i<s.length;i+=step){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return (h>>>0).toString(16)+'-'+s.length;}
 let _odet=null,_odetLoading=null,_odetFailed=false;
 async function ensureObjectDetector(){
   if(_odet)return _odet;
@@ -1397,7 +1407,7 @@ async function detectScene(img){
   try{
     const res=det.detect(img);
     const area=(img.naturalWidth||img.width||0)*(img.naturalHeight||img.height||0);
-    let personShare=0,personScore=0,obj='',objScore=0;const names=[];
+    let personShare=0,personScore=0,obj='',objScore=0,indoor='',indoorScore=0;const names=[];
     ((res&&res.detections)||[]).forEach(function(d){
       const c=(d.categories&&d.categories[0])||{};
       const nm=String(c.categoryName||'').toLowerCase(),sc=c.score||0;
@@ -1406,8 +1416,9 @@ async function detectScene(img){
       const share=(b&&area)?Math.min(1,(b.width*b.height)/area):0;
       if(nm==='person'){if(sc>personScore)personScore=sc;if(sc>=PERSON_MIN_SCORE&&share>personShare)personShare=share;}
       else if(OD_NONNATURE.indexOf(nm)>=0&&sc>objScore){objScore=sc;obj=nm;}
+      if(MISSION_INDOOR.indexOf(nm)>=0&&sc>indoorScore){indoorScore=sc;indoor=nm;}
     });
-    return {personShare:personShare,personScore:personScore,obj:obj,objScore:objScore,names:names};
+    return {personShare:personShare,personScore:personScore,obj:obj,objScore:objScore,indoor:indoor,indoorScore:indoorScore,names:names};
   }catch(e){return null;}
 }
 /* Nur der Personen-Anteil (fuer Missions-Belege). Ohne Modell: Rueckfall auf Gesicht. */
@@ -1660,7 +1671,7 @@ function screenHome(){
     <div class="banner em" style="margin-top:18px"><div class="ic">🌐</div><div><b>Teil der weltweiten Biodiversität</b><div class="mini" style="opacity:.85">Jeder geprüfte Fund ist ein echter Datenpunkt – exportierbar im Darwin-Core-Format.</div></div></div>
   </div>`;
 }
-function obsRow(o){const qb=qualBadge(o);const canConfirm=o.source==='scan'&&o.status==='validated';
+function obsRow(o){const qb=qualBadge(o);const canConfirm=(o.source==='scan'&&o.status==='validated')||(o.source==='mission'&&o.flagWhy==='indoor'&&o.status==='flagged');
   return `<div class="obs">${o.photo&&!o.isAudio?`<img src="${o.photo}" alt="">`:`<div class="ph">${o.isAudio?'🎤':(o.emoji||'🔎')}</div>`}
     <div style="flex:1;min-width:0"><div class="t">${esc(o.speciesDe||o.speciesKey)}</div><div class="s">${new Date(o.createdAt).toLocaleString('de-DE',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}${o.source==='mission'?' · Mission':''}${(o.confirms||0)>0?' · ✔︎ '+o.confirms:''}</div></div>
     <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">
@@ -1670,6 +1681,11 @@ function obsRow(o){const qb=qualBadge(o);const canConfirm=o.source==='scan'&&o.s
    Ab 1 unabhängiger Bestätigung wird er „Forschungsqualität" (+1 Score-Bonus, einmalig). */
 function peerConfirm(id){
   const o=OBS.find(x=>x.id===id);if(!o)return;
+  if(o.source==='mission')return openModal(`<h3>✔︎ Missions-Beleg prüfen</h3>
+    <div class="mini muted" style="margin:4px 0 10px">Die KI war bei diesem Foto unsicher. Eine <b>zweite Person</b> (z. B. aus eurer Gruppe oder die Lehrkraft) schaut es an: Ist „${esc(o.speciesDe||o.speciesKey)}" darauf wirklich zu sehen?</div>
+    ${o.photo?`<img src="${o.photo}" alt="" style="width:100%;max-height:200px;object-fit:cover;border-radius:12px;margin-bottom:10px">`:''}
+    <button class="btn btn-primary" onclick="doPeerConfirm('${o.id}')">Ja, die Aktion ist auf dem Foto</button>
+    <button class="btn btn-ghost" style="margin-top:8px" onclick="closeModal()">Nein / Abbrechen</button>`);
   openModal(`<h3>✔︎ Fund bestätigen</h3>
     <div class="mini muted" style="margin:4px 0 10px">Eine <b>zweite Person</b> (z. B. Partner:in, Lehrkraft oder anderes Team) bestätigt: „${esc(o.speciesDe||o.speciesKey)}" ist richtig bestimmt. Das hebt den Fund auf <b>Forschungsqualität</b> – wie bei iNaturalist.</div>
     <div class="mini" style="background:var(--s50);border-radius:10px;padding:10px;margin-bottom:12px">🛡️ Bitte nur bestätigen, wenn ihr die Art wirklich erkennt. Falsche Bestätigungen schwächen die Datenqualität.</div>
@@ -1679,6 +1695,12 @@ function peerConfirm(id){
 async function doPeerConfirm(id){
   const o=OBS.find(x=>x.id===id);if(!o){closeModal();return;}
   o.confirms=(o.confirms||0)+1;
+  /* Runde 11: Missions-Beleg, bei dem die KI „drinnen“ sah, wird durch eine 2. Person gültig. */
+  if(o.source==='mission'&&o.flagWhy==='indoor'&&o.status==='flagged'){
+    const m=allMissions().find(x=>'mission_'+x.id===o.speciesKey);
+    o.status='validated';o.flagWhy=null;o.scoreImpact=m?m.impact:0;o._qBonus=true;
+    (o.checks=o.checks||[]).push({lvl:'ok',t:'Von einer zweiten Person geprüft.'});
+  }
   if(qualityTier(o)==='research'&&!o._qBonus){o._qBonus=true;o.scoreImpact=(o.scoreImpact||0)+1;}
   try{await IDB.add(o);}catch(e){}
   if(supaOn())supaSync(o);
@@ -2127,7 +2149,7 @@ async function shoot(){
   stopCam();afterPhoto();
 }
 function closeCamera(){stopCam();window._ghost=null;$('cam').classList.add('hidden');}
-function cancelCamera(){window._monitorSpot=null;window._missionId=null;window._cleanupStage=null;window._isAudio=false;closeCamera();}
+function cancelCamera(){window._monitorSpot=null;window._missionFlag=null;window._missionId=null;window._cleanupStage=null;window._isAudio=false;closeCamera();}
 
 /* Nach Foto: identifizieren → bestätigen → speichern */
 /* Leeres/dunkles/überstrahltes Foto ohne Motiv erkennen (z. B. „schwarzes Bild"). */
@@ -2139,6 +2161,15 @@ function gateLog(gate,overruled){try{const sc=gate&&gate.scene||{};const l=JSON.
   localStorage.setItem('bioglow_gatelog',JSON.stringify(l.slice(-200)));}catch(e){}}
 function gateStats(){try{const l=JSON.parse(localStorage.getItem('bioglow_gatelog')||'[]');return {rej:l.filter(x=>!x.o).length,over:l.filter(x=>x.o).length};}catch(e){return {rej:0,over:0};}}
 function personPhotoReject(){const mid=window._missionId;openModal('<div style="text-align:center"><div style="font-size:40px">🙂</div><h3>Das sieht nach einem Menschen aus</h3><div class="mini muted" style="margin:8px 0 14px">Bitte fotografiere <b>die Natur oder deine Aktion</b> (z. B. den gesäuberten Uferbereich oder den Müllsack) – nicht dich selbst.</div><button class="btn btn-em" onclick="closeModal();openCamera('+(mid?"'"+mid+"'":"null")+')">📷 Neues Foto</button><button class="btn btn-ghost" style="margin-top:8px" onclick="closeModal()">Schließen</button></div>');}
+function indoorPhotoReject(obj){const mid=window._missionId;const de=(typeof OD_DE!=='undefined'&&OD_DE[obj])||obj;
+  openModal('<div style="text-align:center"><div style="font-size:40px">🏠</div><h3>Das sieht nach drinnen aus</h3><div class="mini muted" style="margin:8px 0 14px">Die KI sieht auf dem Foto: <b>'+esc(de)+'</b>. Ein Beleg zeigt <b>deine Aktion draußen</b> – nicht einen Bildschirm oder ein Zimmer.</div>'
+  +'<button class="btn btn-em" onclick="closeModal();openCamera('+(mid?"'"+mid+"'":"null")+')">📷 Neues Foto</button>'
+  +'<button class="btn btn-ghost" style="margin-top:8px" onclick="closeModal();window._missionFlag=\'indoor:'+esc(de)+'\';saveMissionProof(\''+mid+'\')">🌿 Stimmt nicht – trotzdem melden (vorläufig)</button>'
+  +'<button class="btn btn-ghost" style="margin-top:8px" onclick="cancelCamera();closeModal()">Abbrechen</button></div>');}
+function duplicatePhotoReject(){const mid=window._missionId;
+  openModal('<div style="text-align:center"><div style="font-size:40px">🔁</div><h3>Dieses Foto kennt die App schon</h3><div class="mini muted" style="margin:8px 0 14px">Jedes Foto zählt nur <b>einmal</b>. Mach bitte ein neues Foto von deiner Aktion.</div>'
+  +'<button class="btn btn-em" onclick="closeModal();openCamera('+(mid?"'"+mid+"'":"null")+')">📷 Neues Foto</button>'
+  +'<button class="btn btn-ghost" style="margin-top:8px" onclick="cancelCamera();closeModal()">Abbrechen</button></div>');}
 async function afterPhoto(){
   closeCamera();
   window._isAudio=false;
@@ -2153,7 +2184,7 @@ async function afterPhoto(){
     return renderMultiScan();
   }
   // Leeres/dunkles Foto → kein Motiv → keine Erkennung, keine Punkte (Monitoring darf Flächen abbilden).
-  if(!window._monitorSpot&&photoLooksEmpty(window._analysis)){return emptyPhotoReject();}
+  if(!window._monitorSpot&&String(window._missionId)!=='24'&&photoLooksEmpty(window._analysis)){return emptyPhotoReject();}
   if(window._monitorSpot){return saveMonitorShot();}
   // Missions-Beleg: hier Selfies abweisen (Kopf-Foto als „Aktion erledigt" gibt es nicht). Beim normalen
   // Scan macht das der Türsteher in autoIdentify NACH Pl@ntNet – so werden echte Pflanzen nie vorschnell abgewiesen.
@@ -2162,8 +2193,15 @@ async function afterPhoto(){
       const _pimg=await dataUrlToImg(camPhoto);
       /* Nicht mehr „irgendein Gesicht" – erst ab einem klaren Bildanteil. Ein Kind, das
          klein neben dem gesäuberten Ufer steht, soll seinen Beleg behalten. */
-      if(await personShareOf(_pimg)>=PERSON_MAX_SHARE)return personPhotoReject();
+      const _sc=await detectScene(_pimg);
+      const _ps=_sc?_sc.personShare:((await containsFace(_pimg))?1:0);
+      if(_ps>=PERSON_MAX_SHARE)return personPhotoReject();
+      /* Runde 11: Bildschirm oder Zimmer statt Aktion draußen? */
+      if(_sc&&_sc.indoor&&_sc.indoorScore>=OBJECT_MIN_SCORE&&MISSION_DEVICE_OK.indexOf(parseInt(window._missionId,10))<0)
+        return indoorPhotoReject(_sc.indoor);
     }catch(e){}
+    /* Runde 11: dasselbe Foto zählt nur einmal. */
+    if(window._cleanupStage!=='before'){const _h=photoHash(camPhoto);if(OBS.some(o=>o.photoHash===_h))return duplicatePhotoReject();}
     if(window._cleanupStage==='before')return saveBeforePhoto(window._missionId);
     return saveMissionProof(window._missionId);
   }
@@ -2454,7 +2492,14 @@ async function litterHint(dataUrl){
 }
 function startMission(id){
   const m=allMissions().find(x=>String(x.id)===String(id));
-  if(!m||!isCleanup(m)){window._cleanupStage=null;return openCamera(id);}
+  if(!m){window._cleanupStage=null;return openCamera(id);}
+  if(!isCleanup(m)){window._cleanupStage=null;
+    const _rep=OBS.some(o=>o.source==='mission'&&o.speciesKey==='mission_'+m.id&&o.status==='validated'&&(Date.now()-new Date(o.observedAt||o.createdAt).getTime())<MISSION_REPEAT_H*3.6e6);
+    return openModal('<h3>'+m.emoji+' '+esc(m.title)+'</h3><div class="mini" style="margin:6px 0 12px;line-height:1.6">So zählt dein Beleg:<br>📷 Auf dem Foto ist <b>'+esc(missionProofText(m))+'</b> zu sehen.<br>🌳 Draußen fotografieren – nicht vom Bildschirm.<br>🔁 Jedes Foto zählt nur einmal.</div>'
+      +(_rep?'<div class="mini" style="background:var(--amb-l,#fef3c7);border-radius:10px;padding:8px 10px;margin-bottom:10px">Diese Mission habt ihr heute schon belegt. Ein weiterer Beleg bringt erst morgen wieder Team-Punkte.</div>':'')
+      +'<button class="btn btn-primary" onclick="closeModal();openCamera(\''+String(m.id).replace(/[^\w-]/g,'')+'\')">📷 Beleg-Foto aufnehmen</button>'
+      +'<button class="btn btn-ghost" style="margin-top:8px" onclick="closeModal()">Abbrechen</button>');
+  }
   const b=getBefore(id);
   if(b){
     return openModal('<h3>'+m.emoji+' '+esc(m.title)+'</h3><div class="mini muted" style="margin:4px 0 10px">Dein Vorher-Foto vom <b>'+new Date(b.at).toLocaleString('de-DE',{dateStyle:'short',timeStyle:'short'})+'</b> ist gespeichert.</div>'
@@ -2491,10 +2536,18 @@ async function saveMissionProof(id){
     rec.beforeMinutes=Math.round((new Date(now)-new Date(_bf.at))/60000);setBefore(id,null);
   }
   window._cleanupStage=null;
-  const verdict=checkObs(rec);rec.status=verdict.status;rec.checks=verdict.checks;
+  const verdict=checkObs(rec);
+  if(window._cleanupStage!=='before')rec.photoHash=photoHash(camPhoto);
+  const _flag=window._missionFlag||'';window._missionFlag=null;let _why='';
+  if(_flag.indexOf('indoor:')===0){verdict.checks.push({lvl:'warn',t:'KI sah „'+_flag.slice(7)+'“ – vom Kind überstimmt, bitte in der Gruppe prüfen.'});_why='KI unsicher – eine 2. Person kann ihn in „Meine Funde“ bestätigen';}
+  const _prev=OBS.find(o=>o.source==='mission'&&o.speciesKey===rec.speciesKey&&o.status==='validated'&&(Date.now()-new Date(o.observedAt||o.createdAt).getTime())<MISSION_REPEAT_H*3.6e6);
+  if(_prev){verdict.checks.push({lvl:'warn',t:'Diese Mission ist heute schon belegt – Team-Punkte gibt es erst morgen wieder.'});_why='heute schon belegt';}
+  if(_why&&verdict.status==='validated')verdict.status='flagged';
+  if(_prev)rec.flagWhy='repeat';else if(_flag.indexOf('indoor:')===0)rec.flagWhy='indoor';
+  rec.status=verdict.status;rec.checks=verdict.checks;
   rec.scoreImpact=verdict.status==='validated'?m.impact:0;rec.xp=m.xp+(verdict.status==='validated'?m.impact*2:0);
   await IDB.add(rec);OBS.push(rec);if(supaOn())supaSync(rec);bumpStreak();closeModal();
-  toast('Mission belegt: +'+rec.xp+' XP'+(rec.scoreImpact?' · +'+rec.scoreImpact+' Team-Punkte':' (vorläufig)'));
+  toast('Mission belegt: +'+rec.xp+' XP'+(rec.scoreImpact?' · +'+rec.scoreImpact+' Team-Punkte':' (vorläufig'+(_why?': '+_why:'')+')'));
   if(isCleanup(m)){askCleanupAmount(rec.id);return;}
   if(m.cat==='Lebensraum'){return offerFollowUp(rec.id);}
   go('missions');
@@ -3447,6 +3500,7 @@ function todayCard(){
 }
 /* „Neu in BIOGLOW“ – bei jedem Update hier oben einen Eintrag ergänzen (neuester zuerst). */
 const WHATS_NEW=[
+  {v:'2026-11-06',items:['📷 Missions-Fotos werden jetzt geprüft: Die App sagt vorher, was aufs Foto gehört. Bildschirm- und Zimmerfotos, dasselbe Foto zweimal und dieselbe Mission mehrmals am Tag zählen nicht mehr.','🌙 Die Mission „Lichtverschmutzung messen“ nimmt jetzt auch dunkle Nachtfotos an.']},
   {v:'2026-10-29',items:['📊 Die Natur-Gesundheit gilt jetzt für deinen Ort und kann auch sinken – unter „Warum dieser Wert?“ siehst du, woher jeder Punkt kommt.','⭐ Neu: Team-Punkte für deinen Fleiß.','🏆 Freiwillige Bestenliste mit Spitznamen (Profil → Einstellungen).','🎯 Gruppenziel, 🐝 Wochen-Challenge und 🏡 dein Natur-Garten.','📅 Jeden Tag neu: Art des Tages, Naturkalender und „Wusstest du?“.']},
   {v:'2026-10-16',items:['🔔 Erinnerung an Missionen – weil ihr euch das in der Umfrage gewünscht habt.']},
   {v:'2026-10-03',items:['🧠 Neues Quiz: Natur-Wissen, „Wer bin ich?“-Rätsel und „Mythos oder Wahrheit?“.','🍂 24 Missionen – passende zur Jahreszeit stehen oben.']}
