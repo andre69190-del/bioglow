@@ -2539,7 +2539,7 @@ async function saveMissionProof(id){
   const verdict=checkObs(rec);
   if(window._cleanupStage!=='before')rec.photoHash=photoHash(camPhoto);
   const _flag=window._missionFlag||'';window._missionFlag=null;let _why='';
-  if(_flag.indexOf('indoor:')===0){verdict.checks.push({lvl:'warn',t:'KI sah „'+_flag.slice(7)+'“ – vom Kind überstimmt, bitte in der Gruppe prüfen.'});_why='KI unsicher – eine 2. Person kann ihn in „Meine Funde“ bestätigen';}
+  if(_flag.indexOf('indoor:')===0){verdict.checks.push({lvl:'warn',t:'KI sah „'+_flag.slice(7)+'“ – vom Kind überstimmt, bitte in der Gruppe prüfen.'});_why='KI unsicher – eine 2. Person kann ihn in „Deine Beobachtungen“ (Startseite) bestätigen';}
   const _prev=OBS.find(o=>o.source==='mission'&&o.speciesKey===rec.speciesKey&&o.status==='validated'&&(Date.now()-new Date(o.observedAt||o.createdAt).getTime())<MISSION_REPEAT_H*3.6e6);
   if(_prev){verdict.checks.push({lvl:'warn',t:'Diese Mission ist heute schon belegt – Team-Punkte gibt es erst morgen wieder.'});_why='heute schon belegt';}
   if(_why&&verdict.status==='validated')verdict.status='flagged';
