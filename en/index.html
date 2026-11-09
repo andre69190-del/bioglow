@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BIOGLOW – Recognise. Understand. Act.</title>
+<meta name="description" content="BIOGLOW is a citizen-science app by Team Maßbots for the FIRST LEGO League 2026/27: recognise, document and protect habitats – right in your browser, installable on your phone.">
+<meta name="theme-color" content="#10b981">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://bioglow.arndt-software.de/en/">
+<link rel="alternate" hreflang="de" href="https://bioglow.arndt-software.de/">
+<link rel="alternate" hreflang="en" href="https://bioglow.arndt-software.de/en/">
+<link rel="alternate" hreflang="x-default" href="https://bioglow.arndt-software.de/">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://bioglow.arndt-software.de/en/">
+<meta property="og:title" content="BIOGLOW – Recognise. Understand. Act.">
+<meta property="og:description" content="A citizen-science app by Team Maßbots for the FIRST LEGO League 2026/27. Document and protect habitats.">
+<meta property="og:locale" content="en_GB">
+<meta property="og:locale:alternate" content="de_DE">
+<style>
+  :root{
+    --bg:#ecfdf5; --card:#ffffff; --ink:#0f2f23; --muted:#4b6b5e;
+    --green:#10b981; --green-d:#059669; --line:#d6f0e5;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--ink);line-height:1.65;-webkit-font-smoothing:antialiased;
+    background:radial-gradient(1100px 500px at 50% -160px,#c9f7e4 0%,var(--bg) 60%) no-repeat,var(--bg);
+    min-height:100vh;
+  }
+  .wrap{max-width:920px;margin:0 auto;padding:0 20px}
+
+  header{text-align:center;padding:70px 20px 30px}
+  .logo{display:inline-flex;align-items:center;gap:10px;font-weight:800;letter-spacing:.5px;
+    color:var(--green-d);font-size:15px;text-transform:uppercase}
+  .logo .spark{font-size:20px}
+  h1{font-size:clamp(2.1rem,6vw,3.3rem);font-weight:800;letter-spacing:-1px;margin:18px 0 8px}
+  .tag{color:var(--green-d);font-weight:600;font-size:clamp(1rem,2.6vw,1.25rem);letter-spacing:.5px}
+  .lead{color:var(--muted);max-width:600px;margin:16px auto 0;font-size:1.05rem}
+
+  .cta{text-align:center;margin:32px 0 10px;display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+  .btn{display:inline-flex;align-items:center;gap:9px;text-decoration:none;font-weight:700;
+    padding:14px 26px;border-radius:14px;font-size:1.05rem;transition:.15s}
+  .btn-primary{background:var(--green);color:#fff;box-shadow:0 8px 20px rgba(16,185,129,.35)}
+  .btn-primary:hover{background:var(--green-d);transform:translateY(-2px)}
+  .btn-ghost{background:#fff;color:var(--green-d);border:1px solid var(--line)}
+  .btn-ghost:hover{border-color:var(--green)}
+  .btn .arr{transition:.15s}
+  .btn-primary:hover .arr{transform:translateX(3px)}
+  .hint{text-align:center;color:var(--muted);font-size:.9rem;margin-top:6px}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:18px;margin:44px 0}
+  .feat{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:22px}
+  .feat .ic{font-size:26px;margin-bottom:10px}
+  .feat h3{font-size:1.1rem;margin-bottom:6px}
+  .feat p{color:var(--muted);font-size:.95rem}
+
+  .band{background:var(--card);border:1px solid var(--line);border-radius:18px;
+    padding:26px;text-align:center;margin:10px 0 40px}
+  .band h2{font-size:1.4rem;margin-bottom:8px}
+  .band p{color:var(--muted);max-width:560px;margin:0 auto 18px}
+
+  footer{text-align:center;color:var(--muted);font-size:.88rem;padding:30px 20px 50px;
+    border-top:1px solid var(--line)}
+  footer a{color:var(--green-d);text-decoration:none}
+  footer a:hover{text-decoration:underline}
+
+  .lang{position:absolute;top:16px;right:16px;font-size:.9rem;font-weight:700;text-decoration:none;color:var(--green-d);
+    background:#fff;border:1px solid var(--line);border-radius:999px;padding:6px 12px}
+  .lang:hover{border-color:var(--green)}
+  header{position:relative}
+</style>
+</head>
+<body>
+  <header>
+    <a class="lang" href="../" hreflang="de" lang="de" onclick="try{localStorage.setItem('bioglow-site-lang','de')}catch(e){}">🌐 Deutsch</a>
+    <div class="logo"><span class="spark">✨</span> BIOGLOW</div>
+    <h1>Recognise. Understand.<br>Act.</h1>
+    <p class="tag">Citizen science for habitats</p>
+    <p class="lead">BIOGLOW helps you recognise animals and plants around you,
+    document what you observe and protect habitats –
+    a project by <b>Team Maßbots</b> for the FIRST LEGO League 2026/27.</p>
+
+    <div class="cta">
+      <a class="btn btn-primary" href="../app/">Open the app <span class="arr">→</span></a>
+      <a class="btn btn-ghost" href="#more">Learn more</a>
+    </div>
+    <p class="hint">Runs right in your browser – on your phone, use “Add to Home Screen” to install it as an app. The app follows your phone’s language (English or German).</p>
+  </header>
+
+  <main class="wrap">
+    <section class="grid" id="more">
+      <article class="feat">
+        <div class="ic">🔎</div>
+        <h3>Recognise species</h3>
+        <p>Record observations and identify species – supported by open
+        nature databases.</p>
+      </article>
+      <article class="feat">
+        <div class="ic">📸</div>
+        <h3>Document</h3>
+        <p>Capture finds with a photo and location and build up a picture of
+        the habitat on your doorstep.</p>
+      </article>
+      <article class="feat">
+        <div class="ic">🌱</div>
+        <h3>Protect</h3>
+        <p>Understand which habitats are valuable – and turn that into
+        concrete action.</p>
+      </article>
+    </section>
+
+    <section class="band" style="text-align:left">
+      <h2 style="text-align:center">What’s inside?</h2>
+      <ul style="list-style:none;display:grid;gap:10px;margin-top:12px;line-height:1.5">
+        <li>🎯 <b>24 care missions</b> – from a dead-wood corner to a hedgehog gap in the fence. Missions that fit the season are at the top; safety tips are included.</li>
+        <li>🧺 <b>Before/after proof</b> – for litter actions, a photo before and after, plus the amount and the number of helpers.</li>
+        <li>📈 <b>Monitoring</b> – fixed photo points with an alignment aid, a soil check (dry/moist/wet) and the number of species, so changes become visible.</li>
+        <li>🧠 <b>Quiz by age group</b> – nature knowledge, “Who am I?” riddles, “Myth or fact?” and recognising species from photos.</li>
+        <li>👥 <b>Groups &amp; actions</b> – collect together with a group code and share actions. <a href="guide.html">How it works</a></li>
+        <li>🔒 <b>Data-minimal</b> – finds stay on your device first; locations of endangered species are blurred. <a href="../datenschutz.html" hreflang="de">Privacy policy (in German)</a></li>
+      </ul>
+    </section>
+
+    <section class="band">
+      <h2>Get started</h2>
+      <p>No installation needed – just open the app. On your phone you can
+      also add it to your home screen and use it offline.</p>
+      <a class="btn btn-primary" href="../app/">Open the app <span class="arr">→</span></a>
+    </section>
+  </main>
+
+  <footer>
+    Part of <a href="https://arndt-software.de">arndt-software.de</a> ·
+    © <span id="y"></span> Andre Arndt ·
+    Contact: <a href="mailto:farndt691@gmail.com">farndt691@gmail.com</a>
+    <br><a href="../impressum.html" hreflang="de">Legal notice (in German)</a> · <a href="../datenschutz.html" hreflang="de">Privacy policy (in German)</a> · <a href="guide.html">Guide</a>
+  </footer>
+  <script>document.getElementById('y').textContent=new Date().getFullYear();</script>
+</body>
+</html>

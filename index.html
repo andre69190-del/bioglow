@@ -8,6 +8,21 @@
 <meta name="theme-color" content="#10b981">
 <meta name="robots" content="index, follow">
 <link rel="canonical" href="https://bioglow.arndt-software.de/">
+<link rel="alternate" hreflang="de" href="https://bioglow.arndt-software.de/">
+<link rel="alternate" hreflang="en" href="https://bioglow.arndt-software.de/en/">
+<link rel="alternate" hreflang="x-default" href="https://bioglow.arndt-software.de/">
+<script>
+/* Sprache: einmalig nach der Browser-Sprache weiterleiten (Deutsch bleibt hier, alles andere → Englisch).
+   Eine bewusste Wahl über den Sprach-Knopf wird gemerkt. Suchmaschinen werden nicht umgeleitet. */
+(function(){try{
+  if(/bot|crawl|spider|slurp|lighthouse|preview/i.test(navigator.userAgent))return;
+  var c=localStorage.getItem('bioglow-site-lang');
+  if(c==='de')return; if(c==='en'){location.replace('en/');return;}
+  var L=(navigator.languages&&navigator.languages.length)?navigator.languages:[navigator.language||''];
+  for(var i=0;i<L.length;i++){var x=String(L[i]).slice(0,2).toLowerCase();if(x==='de')return;if(x==='en')break;}
+  location.replace('en/');
+}catch(e){}})();
+</script>
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://bioglow.arndt-software.de/">
 <meta property="og:title" content="BIOGLOW – Erkennen. Verstehen. Handeln.">
@@ -62,10 +77,16 @@
     border-top:1px solid var(--line)}
   footer a{color:var(--green-d);text-decoration:none}
   footer a:hover{text-decoration:underline}
+
+  .lang{position:absolute;top:16px;right:16px;font-size:.9rem;font-weight:700;text-decoration:none;color:var(--green-d);
+    background:#fff;border:1px solid var(--line);border-radius:999px;padding:6px 12px}
+  .lang:hover{border-color:var(--green)}
+  header{position:relative}
 </style>
 </head>
 <body>
   <header>
+    <a class="lang" href="en/" hreflang="en" lang="en" onclick="try{localStorage.setItem('bioglow-site-lang','en')}catch(e){}">🌐 English</a>
     <div class="logo"><span class="spark">✨</span> BIOGLOW</div>
     <h1>Erkennen. Verstehen.<br>Handeln.</h1>
     <p class="tag">Citizen Science für Lebensräume</p>

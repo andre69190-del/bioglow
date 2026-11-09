@@ -1,7 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>https://bioglow.arndt-software.de/</loc><lastmod>2026-10-28</lastmod><priority>1.0</priority></url>
-  <url><loc>https://bioglow.arndt-software.de/anleitung.html</loc><lastmod>2026-10-28</lastmod><priority>0.6</priority></url>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <url><loc>https://bioglow.arndt-software.de/</loc><lastmod>2026-11-09</lastmod><priority>1.0</priority>
+    <xhtml:link rel="alternate" hreflang="de" href="https://bioglow.arndt-software.de/"/><xhtml:link rel="alternate" hreflang="en" href="https://bioglow.arndt-software.de/en/"/></url>
+  <url><loc>https://bioglow.arndt-software.de/en/</loc><lastmod>2026-11-09</lastmod><priority>0.9</priority>
+    <xhtml:link rel="alternate" hreflang="de" href="https://bioglow.arndt-software.de/"/><xhtml:link rel="alternate" hreflang="en" href="https://bioglow.arndt-software.de/en/"/></url>
+  <url><loc>https://bioglow.arndt-software.de/anleitung.html</loc><lastmod>2026-11-09</lastmod><priority>0.6</priority>
+    <xhtml:link rel="alternate" hreflang="de" href="https://bioglow.arndt-software.de/anleitung.html"/><xhtml:link rel="alternate" hreflang="en" href="https://bioglow.arndt-software.de/en/guide.html"/></url>
+  <url><loc>https://bioglow.arndt-software.de/en/guide.html</loc><lastmod>2026-11-09</lastmod><priority>0.5</priority>
+    <xhtml:link rel="alternate" hreflang="de" href="https://bioglow.arndt-software.de/anleitung.html"/><xhtml:link rel="alternate" hreflang="en" href="https://bioglow.arndt-software.de/en/guide.html"/></url>
   <url><loc>https://bioglow.arndt-software.de/impressum.html</loc><lastmod>2026-10-28</lastmod><priority>0.2</priority></url>
-  <url><loc>https://bioglow.arndt-software.de/datenschutz.html</loc><lastmod>2026-10-28</lastmod><priority>0.2</priority></url>
+  <url><loc>https://bioglow.arndt-software.de/datenschutz.html</loc><lastmod>2026-10-29</lastmod><priority>0.2</priority></url>
 </urlset>
